@@ -2,6 +2,21 @@
 
 Typically, the README file is first-read file in the whole coding project.
 
+# Setup and usage
+
+## 1. Install
+
+```bash
+pip install -r requirements.txt
+```
+
+## 2. Prepare data
+
+```bash
+python scripts/download_amazon_reviews.py --category All_Beauty --size 10000 --output_dir data/raw --seed 42
+```
+
+
 # Folder structure
 
 The folder structure below is recommended by Claude:

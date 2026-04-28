@@ -1,0 +1,13 @@
+datasets>=2.16.0
+pandas>=2.2.0
+pyarrow>=14.0.0
+numpy>=1.26.0
+scikit-learn>=1.4.0
+gensim>=4.3.2
+sentence-transformers>=2.6.1
+torch>=2.2.0
+matplotlib>=3.8.0
+python-dotenv>=1.0.1
+tqdm>=4.66.0
+requests>=2.31.0
+seaborn>=0.13.2
