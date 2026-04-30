@@ -37,4 +37,27 @@ def compute_clustering_metrics(X, labels_true, labels_pred, silhouette_sample_si
         print("Warning: Only 1 cluster found, Silhouette score is undefined.")
         metrics['silhouette'] = -1.0 # Or NaN
         
+        
     return metrics
+
+def precision_at_k(actual, predicted, k=10):
+    """
+    Computes Precision@k.
+    actual: true label of the query
+    predicted: list of labels of the top k retrieved items
+    """
+    predicted = predicted[:k]
+    # We consider a retrieval relevant if its label matches the query's label
+    relevant = sum(1 for p in predicted if p == actual)
+    return relevant / k
+
+def mean_reciprocal_rank(actual, predicted):
+    """
+    Computes MRR.
+    actual: true label of the query
+    predicted: list of labels of the retrieved items
+    """
+    for i, p in enumerate(predicted):
+        if p == actual:
+            return 1.0 / (i + 1)
+    return 0.0
