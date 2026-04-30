@@ -86,3 +86,6 @@ Typically, we don't want to directly push "dirty code" into the `main` branch, w
 We will have some conventions for managing the source code:
 + Each PR should have 1 commit only (Learn `git reset`, and `git log` for this)
 + Before openning the PR, you should test all of your code, and resolve all conflict (learn `git fetch` and `git rebase` for this!!!)
+
+# To-read
+
