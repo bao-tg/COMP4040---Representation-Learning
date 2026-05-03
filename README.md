@@ -1,7 +1,5 @@
 # COMP4040---Representation-Learning
 
-Typically, the README file is first-read file in the whole coding project.
-
 # Setup and usage
 
 ## 1. Install
@@ -16,14 +14,7 @@ pip install -r requirements.txt
 python scripts/download_amazon_reviews.py --category All_Beauty --size 10000 --output_dir data/raw --seed 42
 ```
 
-
 # Folder structure
-
-The folder structure below is recommended by Claude:
-+ Typically, there must be one data folder for preprocessing step
-+ One notebooks folder for experimenting, debugging, plotting
-+ src (Source code of every important function)
-+ experiemnts (Used for saving experiments' outpue)
 
 ```bash
 representation-learning/
@@ -70,22 +61,4 @@ representation-learning/
 ├── .env.example        ← HuggingFace token if needed
 └── Makefile            ← shortcuts: make encode, make cluster, make demo
 ```
-
-# It's time to learn git
-
-Some keywords, ask LLMs to learn (Learn it quick, and practice them in your own repositories):
-+ Remote vs Local in Git. How to push code into Remote?
-+ Why we use git add ., and git commit?
-+ What is a Conflict? what does resolving a conflict mean?
-+ What is a Pull Request? How to open a Pull Request?
-
-# Our gitworkflow
-
-Typically, we don't want to directly push "dirty code" into the `main` branch, we implement in our own branch, and open the Pull Request (or PR), and the reviewer (Bao will be the reviewer) will check, if it's validate, your code will be merged into the main.
-
-We will have some conventions for managing the source code:
-+ Each PR should have 1 commit only (Learn `git reset`, and `git log` for this)
-+ Before openning the PR, you should test all of your code, and resolve all conflict (learn `git fetch` and `git rebase` for this!!!)
-
-# To-read
 
