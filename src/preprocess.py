@@ -2,6 +2,8 @@ import re
 import pandas as pd
 from tqdm import tqdm
 
+tqdm.pandas()
+
 def strip_html(text):
     if not isinstance(text, str):
         return ""
@@ -11,7 +13,7 @@ def clean_text(text):
     if not isinstance(text, str):
         return ""
     # Remove extra whitespaces
-    text = re.sub(r'\\s+', ' ', text).strip()
+    text = re.sub(r'\s+', ' ', text).strip()
     return text
 
 def preprocess_data(df, min_length=10, max_tokens=256):

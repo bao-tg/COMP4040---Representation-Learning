@@ -1,67 +1,258 @@
-# Representation Learning Project: Study Guide & Key Concepts
+# Representation Learning Project Study Guide
 
-Based on the codebase we've built, here is a structured summary of the key theoretical concepts, algorithms, and evaluation metrics you should study to deeply understand and defend this project.
+Concepts, experiments, metrics, and final interpretation for the COMP4040
+Amazon Reviews representation-learning project.
 
----
+## Repository Layers
 
-## 1. Data Processing & Sampling
-Before modeling, you handle massive amounts of text data efficiently.
-* **Reservoir Sampling**: An algorithm used in `download_amazon_reviews.py`. It allows you to select a random, uniform sample from a stream of data (like massive HuggingFace datasets) without needing to load the entire dataset into memory.
-* **Stratified Sampling**: Ensuring that your final dataset has an equal representation of classes (e.g., exactly 20% for each 1-5 star rating) to prevent class imbalance from skewing your models.
-* **Parquet Format**: A columnar storage file format. You should understand why it is much faster and more compressed for data analytics compared to CSV or JSON.
+- Source: notebooks, scripts, and `src/` modules.
+- Artifacts: ignored local/server outputs under `data/`, `experiments/`, and
+  `logs/`.
 
----
+Main summary table:
 
-## 2. Text Representation (Encoders)
-You implemented 5 different ways to convert text into mathematical vectors. You must understand the evolution and differences between them:
+```text
+experiments/server_full/summary/final_analysis_summary.md
+```
 
-### Sparse & Linear Models
-* **TF-IDF (Term Frequency-Inverse Document Frequency)**: A statistical measure evaluating how relevant a word is to a document. It creates sparse, high-dimensional vectors.
-* **Truncated SVD (Singular Value Decomposition)**: A linear dimensionality reduction technique. When applied to TF-IDF, it is known as **Latent Semantic Analysis (LSA)**. It extracts underlying topics and makes the sparse vectors dense.
+## 1. Dataset And Preprocessing
 
-### Static Word Embeddings
-* **Word2Vec**: You should know the difference between its two architectures: *CBOW* (predicting a word given context) and *Skip-gram* (predicting context given a word). It captures local, linear semantic relationships (e.g., King - Man + Woman = Queen).
-* **GloVe (Global Vectors)**: Unlike Word2Vec which uses local context windows, GloVe factorizes a global word co-occurrence matrix. 
-* **Limitation**: Both are "static," meaning the word "bank" (river) and "bank" (money) get the exact same vector. You combined word vectors into document vectors via simple averaging.
+The full run uses five Amazon review categories with 400,000 raw rows each. The
+streaming preprocessing stage cleans text, removes empty or very short reviews,
+deduplicates cross-chunk records, and writes a single Parquet file.
 
-### Contextual Sentence Embeddings
-* **Transformer Architecture**: The underlying neural network architecture with self-attention mechanisms that powers modern NLP.
-* **SBERT (Sentence-BERT)**: A modification of the BERT network using Siamese network structures to derive semantically meaningful sentence embeddings that can be compared using cosine-similarity.
-* **BGE (BAAI General Embedding)**: State-of-the-art models optimized heavily via *Contrastive Learning* to pull similar texts together and push dissimilar texts apart in the vector space. They solve the polysemy problem (handling multiple meanings of a word based on context).
+Preprocessing properties:
 
----
+- Streaming preprocess avoids loading all raw JSONL rows into memory.
+- Parquet is columnar and efficient for analytics workloads.
+- Text is normalized, whitespace-cleaned, truncated to a maximum token count,
+  and stored as `cleaned_text`.
+- The final full run keeps `1,946,618` rows from `2,000,000` raw rows.
+
+## 2. Text Encoders
+
+The project compares five representation families. The static embedding
+baselines use pretrained external word vectors for both Word2Vec and GloVe.
+
+### TF-IDF + TruncatedSVD
+
+TF-IDF creates sparse lexical vectors based on term importance. TruncatedSVD
+compresses the sparse matrix into dense vectors, similar to Latent Semantic
+Analysis.
+
+Strengths:
+
+- Fast baseline.
+- Good for lexical similarity and category-specific vocabulary.
+
+Limitations:
+
+- Does not capture contextual meaning well.
+- Semantically similar texts with different wording may look far apart.
+
+### Word2Vec
+
+Word2Vec learns static word embeddings from local context windows. The project
+uses pretrained Google News Word2Vec 300D vectors, then turns review text into
+document vectors by averaging token vectors.
+
+Strengths:
+
+- Provides an external pretrained static embedding baseline.
+- Lightweight compared with transformer encoders.
+
+Limitations:
+
+- Static embeddings cannot disambiguate word senses by context.
+- Simple averaging loses word order and sentence structure.
+- Requires the external Google News Word2Vec vectors, either as a local
+  `GoogleNews-vectors-negative300.bin` file or via gensim download/cache.
+
+### GloVe
+
+GloVe uses pretrained global word co-occurrence vectors. Like Word2Vec, the
+project averages token vectors to produce review embeddings.
+
+Strengths:
+
+- Strong static baseline with external semantic knowledge.
+- Comparable to pretrained Word2Vec as a static external baseline.
+
+Limitations:
+
+- Still static and context-insensitive.
+- Requires the external `glove.840B.300d.txt` file.
+- This run uses pretrained GloVe; it does not train GloVe from scratch on the
+  Amazon corpus.
+
+### SBERT
+
+SBERT produces sentence embeddings optimized for semantic similarity. The
+project uses `all-MiniLM-L6-v2`.
+
+Strengths:
+
+- Captures sentence-level meaning.
+- Strong clustering behavior in the final run.
+
+Limitations:
+
+- More expensive than static methods.
+- Smaller than BGE-large, so it can miss some fine-grained semantic signal.
+
+### BGE-large
+
+BGE-large (`BAAI/bge-large-en-v1.5`) is a transformer embedding model trained
+for high-quality semantic retrieval.
+
+Strengths:
+
+- Best retrieval and linear probe performance in the final run.
+- Strong contextual representation.
+
+Limitations:
+
+- Expensive to encode at full scale.
+- GPU is strongly preferred for full 2M-row runs.
 
 ## 3. Experiment 1: Clustering
-*Goal: Grouping similar representations together without supervision.*
 
-### Key Algorithms
-* **Mini-Batch K-Means**: A variant of K-Means that updates cluster centroids using small random batches of data rather than the whole dataset. Essential for scaling to 1.5M records. Relies on Euclidean distance.
-* **UMAP (Uniform Manifold Approximation and Projection)**: A modern, non-linear dimensionality reduction algorithm. Unlike PCA (which is linear), UMAP preserves local manifold structure and global relationships, making it excellent for visualizing high-dimensional clusters in 2D or 3D.
+Goal: measure whether unsupervised clusters align with product categories.
 
-### Evaluation Metrics
-* **NMI (Normalized Mutual Information)**: Measures the mutual dependence between the predicted clusters and ground truth labels. It is normalized between 0 (no mutual information) and 1 (perfect correlation).
-* **ARI (Adjusted Rand Index)**: Computes a similarity measure between two clusterings by considering all pairs of samples. It is "adjusted" for chance, meaning a random clustering will score close to 0.0.
-* **Silhouette Score**: An internal evaluation metric (doesn't need ground truth labels). It measures how similar an object is to its own cluster (cohesion) compared to other clusters (separation). Ranges from -1 to 1. 
+Algorithm:
 
----
+- MiniBatchKMeans, scalable to full embeddings.
+- Number of clusters equals number of category labels.
+
+Metrics:
+
+- NMI: normalized mutual information between clusters and categories.
+- ARI: adjusted pairwise agreement between predicted clusters and categories.
+- Silhouette: internal cohesion/separation score, computed on a sample for
+  scalability.
+
+Visualization:
+
+- UMAP uses a 50,000-point stratified sample for visual comparison.
+- The project saves both category-colored and KMeans-cluster-colored figures.
+
+Final interpretation:
+
+- SBERT has the strongest category-aligned clustering.
+- BGE is also strong but performs best on retrieval and linear probe instead.
 
 ## 4. Experiment 2: Semantic Retrieval
-*Goal: Finding the most semantically similar reviews to a given query.*
 
-### Key Algorithms
-* **FAISS (Facebook AI Similarity Search)**: A library for efficient similarity search and clustering of dense vectors. You should understand the difference between exact search (`IndexFlatL2`, `IndexFlatIP`) and approximate nearest neighbor (ANN) search (like HNSW or IVF) which FAISS specializes in for billions of vectors.
-* **L2 Distance vs. Cosine Similarity**: How geometric distance relates to the angle between two vectors.
+Goal: evaluate whether similar-category reviews are near each other in embedding
+space.
 
-### Evaluation Metrics
-* **Precision@k**: The fraction of relevant documents among the top *k* retrieved documents. (e.g., If I retrieve 10 documents, and 3 have the correct category, Precision@10 is 0.3).
-* **MRR (Mean Reciprocal Rank)**: A statistic evaluating responses to queries. The reciprocal rank of a query response is the multiplicative inverse of the rank of the *first* correct answer (e.g., if the first relevant document is at position 3, the score is 1/3). MRR is the average across all queries.
+Algorithm:
 
----
+- FAISS exact L2 index over the full embedding matrix.
+- `--retrieval-queries 5000` means 5,000 sampled query reviews are evaluated,
+  while the index still contains all full-run rows.
+
+Metrics:
+
+- Precision@5, Precision@10, Precision@50.
+- MRR: mean reciprocal rank of the first relevant retrieved item.
+
+Final interpretation:
+
+- BGE-large is the strongest semantic retrieval encoder.
+- SBERT is second.
+- Compare GloVe directly against W2V as the pretrained-static baseline pair.
+- The switch from self-trained W2V to pretrained Google News W2V makes the W2V
+  comparison more consistent with GloVe, because both are now external static
+  word-vector baselines.
 
 ## 5. Experiment 3: Anomaly Detection
-*Goal: Finding reviews that don't fit the expected patterns.*
 
-### Key Algorithms
-* **Isolation Forest**: An unsupervised algorithm that detects anomalies by isolating observations. It builds an ensemble of random decision trees; anomalies are isolated closer to the root of the tree (shorter path lengths) because they are fewer and different.
-* **Ridge Regression (Tikhonov Regularization)**: Used to predict the star rating from the embeddings. You should understand how the L2 penalty (alpha) prevents overfitting on high-dimensional data.
-* **Residual Analysis**: You detect anomalies by looking at the *residuals* (the absolute difference between the actual rating and the rating predicted by the text). High residuals indicate a semantic contradiction (e.g., sarcastic text with a contradictory star rating).
+Goal: surface reviews that are unusual in embedding space or inconsistent
+between text and star rating.
+
+Methods:
+
+- Isolation Forest flags the top 1% embedding-space outliers.
+- Rating-text inconsistency uses a scalable L2 `SGDRegressor` to predict star
+  ratings from frozen embeddings and flags the top residuals.
+
+Important caveat:
+
+- The anomaly count is controlled by `contamination=0.01`, so counts are not an
+  encoder ranking. Interpret anomaly CSV examples and residual thresholds
+  qualitatively.
+
+## 6. Experiment 4: Linear Probe
+
+Goal: test how much rating-relevant information is encoded in frozen
+representations.
+
+Method:
+
+- Train a lightweight L2 logistic probe with `SGDClassifier(loss="log_loss")`.
+- Target labels are 1-5 star ratings.
+- Stratified 80/20 train/test split.
+
+Metrics:
+
+- Accuracy.
+- Macro-F1.
+- Weighted-F1.
+- Per-class F1 and confusion matrix.
+
+Final interpretation:
+
+- BGE-large is best by accuracy and F1, meaning its embeddings preserve the most
+  rating-relevant signal.
+
+## 7. Experiment 5: Efficiency And Scalability
+
+Goal: document the cost of full-scale embedding generation and analysis.
+
+Reported fields:
+
+- Rows and embedding dimensions.
+- File size per embedding.
+- Device used where available.
+- Parsed encode runtime from logs, especially for BGE-large.
+
+Key point:
+
+- Embedding generation happens once and is reused through `.npy` files and
+  `.meta.json` completion metadata.
+
+## 8. Final Result Summary
+
+Final full-run artifacts are saved under:
+
+```text
+experiments/server_full/
+```
+
+The main summary table is:
+
+```text
+experiments/server_full/summary/final_analysis_summary.md
+```
+
+High-level conclusion:
+
+- BGE-large is best for semantic retrieval and rating prediction.
+- SBERT is best for category-aligned clustering.
+- GloVe and W2V are both pretrained static embedding baselines.
+- TF-IDF remains a useful lexical baseline.
+- Word2Vec is lightweight but weaker on clustering in this setup.
+
+W2V interpretation:
+
+- Pretrained W2V improves nearest-neighbor retrieval compared with a small
+  corpus-trained static model because it brings broader external semantic
+  knowledge.
+- It can still underperform on clustering and rating prediction because Google
+  News vectors are not tuned to Amazon review categories, star ratings, or
+  review-style sentiment.
+- This is an expected tradeoff between broad pretrained lexical semantics and
+  domain/task-specific signal.
+
+Saved JSON, CSV, and PNG artifacts are the source of truth for reporting.

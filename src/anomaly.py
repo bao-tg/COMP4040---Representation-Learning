@@ -58,7 +58,7 @@ def detect_rating_inconsistencies(embeddings, ratings, top_percent=0.01, random_
     model = Ridge(alpha=1.0, random_state=random_state)
     
     # For a robust approach, we could use cross-validation, but for simplicity and speed
-    # on 1.5M records, fitting on the whole dataset to find residuals is acceptable for anomaly detection.
+    # on large full-run artifacts, fitting on the whole dataset to find residuals is acceptable for anomaly detection.
     # We want to find points that the model *cannot* fit well, even when seeing them in training.
     model.fit(embeddings, ratings)
     
