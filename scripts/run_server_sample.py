@@ -10,6 +10,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.full_pipeline import (  # noqa: E402
+    DEFAULT_GLOVE_PATH,
+    DEFAULT_GLOVE_URL,
+    DEFAULT_GLOVE_ZIP_PATH,
     EXPERIMENTS_DIR,
     RAW_DIR,
     preprocess_raw_sample_to_parquet,
@@ -43,6 +46,24 @@ def main() -> None:
     parser.add_argument("--rows-per-category", type=int, default=1_000)
     parser.add_argument("--encoders", type=parse_encoders, default=parse_encoders("tfidf,w2v,sbert,bge"))
     parser.add_argument("--include-glove", action="store_true", help="Include GloVe if glove.840B.300d.txt exists.")
+    parser.add_argument(
+        "--glove-path",
+        type=Path,
+        default=DEFAULT_GLOVE_PATH,
+        help="Local GloVe 840B 300D text file path for the glove encoder.",
+    )
+    parser.add_argument(
+        "--glove-url",
+        default=DEFAULT_GLOVE_URL,
+        help="GloVe zip URL used when --download-glove is passed.",
+    )
+    parser.add_argument(
+        "--glove-zip-path",
+        type=Path,
+        default=DEFAULT_GLOVE_ZIP_PATH,
+        help="Local GloVe zip cache path used when --download-glove is passed.",
+    )
+    parser.add_argument("--download-glove", action="store_true", help="Download and extract GloVe if --glove-path is missing.")
     parser.add_argument(
         "--pretrained-w2v-path",
         type=Path,
@@ -91,6 +112,10 @@ def main() -> None:
         pretrained_w2v_path=args.pretrained_w2v_path,
         pretrained_w2v_name=args.pretrained_w2v_name,
         allow_pretrained_w2v_download=args.download_pretrained_w2v,
+        glove_path=args.glove_path,
+        glove_url=args.glove_url,
+        glove_zip_path=args.glove_zip_path,
+        allow_glove_download=args.download_glove,
         force=args.force,
         transformer_batch_size=args.transformer_batch_size,
         text_batch_size=args.text_batch_size,

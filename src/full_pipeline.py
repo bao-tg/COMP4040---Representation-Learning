@@ -6,6 +6,8 @@ import os
 import pickle
 import re
 import time
+import urllib.request
+import zipfile
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -23,6 +25,9 @@ PROCESSED_PATH = PROCESSED_DIR / "cleaned_reviews.parquet"
 EMBEDDING_DIR = PROJECT_ROOT / "data" / "embeddings"
 MODEL_DIR = PROJECT_ROOT / "data" / "models"
 EXPERIMENTS_DIR = PROJECT_ROOT / "experiments"
+DEFAULT_GLOVE_URL = "https://nlp.stanford.edu/data/glove.840B.300d.zip"
+DEFAULT_GLOVE_PATH = PROJECT_ROOT / "glove.840B.300d.txt"
+DEFAULT_GLOVE_ZIP_PATH = PROJECT_ROOT / "glove.840B.300d.zip"
 
 RAW_KEEP_COLUMNS = [
     "rating",
@@ -518,9 +523,12 @@ def write_transformer_embeddings(
     model = SentenceTransformer(model_name, device=device)
     dim = int(model.get_sentence_embedding_dimension())
 
-    output = _open_output_memmap(output_path, (total_rows, dim), resume=resume)
     meta_path = _embedding_meta_path(output_path)
-    rows_written = _read_rows_written(meta_path, total_rows, dim) if output_path.exists() else 0
+    if not resume and meta_path.exists():
+        meta_path.unlink()
+
+    output = _open_output_memmap(output_path, (total_rows, dim), resume=resume)
+    rows_written = _read_rows_written(meta_path, total_rows, dim) if resume and output_path.exists() else 0
     text_batch_size = text_batch_size or batch_size
 
     offset = 0
@@ -699,6 +707,82 @@ def collect_vocabulary(
     return vocabulary
 
 
+def download_file(url: str, output_path: str | Path, desc: str | None = None, chunk_size: int = 1024 * 1024) -> Path:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output_path.with_name(output_path.name + ".part")
+    with urllib.request.urlopen(url) as response:
+        total = int(response.headers.get("Content-Length") or 0)
+        with tmp_path.open("wb") as handle:
+            with tqdm(total=total or None, unit="B", unit_scale=True, desc=desc or output_path.name) as progress:
+                while True:
+                    chunk = response.read(chunk_size)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+                    progress.update(len(chunk))
+    tmp_path.replace(output_path)
+    return output_path
+
+
+def extract_zip_member(zip_path: str | Path, member_name: str, output_path: str | Path) -> Path:
+    zip_path = Path(zip_path)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output_path.with_name(output_path.name + ".part")
+    with zipfile.ZipFile(zip_path) as archive:
+        member = member_name if member_name in archive.namelist() else None
+        if member is None:
+            matches = [name for name in archive.namelist() if Path(name).name == member_name]
+            if not matches:
+                raise FileNotFoundError(f"{member_name} not found inside {zip_path}")
+            member = matches[0]
+        info = archive.getinfo(member)
+        with archive.open(member) as source, tmp_path.open("wb") as target:
+            with tqdm(total=info.file_size, unit="B", unit_scale=True, desc=f"Extract {member_name}") as progress:
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    target.write(chunk)
+                    progress.update(len(chunk))
+    tmp_path.replace(output_path)
+    return output_path
+
+
+def ensure_glove_file(
+    glove_path: str | Path = DEFAULT_GLOVE_PATH,
+    *,
+    allow_download: bool = False,
+    glove_url: str = DEFAULT_GLOVE_URL,
+    glove_zip_path: str | Path = DEFAULT_GLOVE_ZIP_PATH,
+) -> dict:
+    glove_path = Path(glove_path)
+    glove_zip_path = Path(glove_zip_path)
+    if glove_path.exists():
+        return {"glove_path": str(glove_path), "downloaded": False}
+    if not allow_download:
+        return {
+            "glove_path": str(glove_path),
+            "skipped_missing_glove": True,
+            "download_hint": "Pass --download-glove or place glove.840B.300d.txt at the repo root.",
+        }
+
+    if not glove_zip_path.exists():
+        print(f"Downloading GloVe vectors from {glove_url} to {glove_zip_path}...")
+        download_file(glove_url, glove_zip_path, desc="Download GloVe")
+    else:
+        print(f"Using existing GloVe zip: {glove_zip_path}")
+
+    extract_zip_member(glove_zip_path, glove_path.name, glove_path)
+    return {
+        "glove_path": str(glove_path),
+        "glove_zip_path": str(glove_zip_path),
+        "glove_url": glove_url,
+        "downloaded": True,
+    }
+
+
 def load_glove_subset(
     glove_path: str | Path,
     vector_size: int = 300,
@@ -721,11 +805,14 @@ def load_glove_subset(
 
 def write_glove_embeddings(
     processed_path: str | Path = PROCESSED_PATH,
-    glove_path: str | Path = PROJECT_ROOT / "glove.840B.300d.txt",
+    glove_path: str | Path = DEFAULT_GLOVE_PATH,
     output_path: str | Path = EMBEDDING_DIR / "glove.npy",
     vector_size: int = 300,
     text_batch_size: int = 8192,
     force: bool = False,
+    allow_download: bool = False,
+    glove_url: str = DEFAULT_GLOVE_URL,
+    glove_zip_path: str | Path = DEFAULT_GLOVE_ZIP_PATH,
 ) -> dict:
     processed_path = Path(processed_path)
     glove_path = Path(glove_path)
@@ -734,8 +821,14 @@ def write_glove_embeddings(
     reusable = _reuse_existing_embedding(output_path, (total_rows, vector_size), force=force)
     if reusable is not None:
         return reusable
-    if not glove_path.exists():
-        return {"path": str(output_path), "skipped_missing_glove": True, "glove_path": str(glove_path)}
+    glove_status = ensure_glove_file(
+        glove_path,
+        allow_download=allow_download,
+        glove_url=glove_url,
+        glove_zip_path=glove_zip_path,
+    )
+    if glove_status.get("skipped_missing_glove"):
+        return {"path": str(output_path), **glove_status}
 
     vocabulary = collect_vocabulary(processed_path, batch_size=text_batch_size)
     embeddings = load_glove_subset(glove_path, vector_size=vector_size, vocabulary=vocabulary)
@@ -748,8 +841,8 @@ def write_glove_embeddings(
         output[offset : offset + len(vectors)] = vectors
         offset += len(vectors)
     output.flush()
-    _write_embedding_meta(output_path, total_rows, total_rows, vector_size, "glove")
-    return {"path": str(output_path), "shape": [total_rows, vector_size], "glove_path": str(glove_path)}
+    _write_embedding_meta(output_path, total_rows, total_rows, vector_size, f"glove:{glove_path.name}")
+    return {"path": str(output_path), "shape": [total_rows, vector_size], **glove_status}
 
 
 def write_all_embeddings(
@@ -764,6 +857,10 @@ def write_all_embeddings(
     pretrained_w2v_path: str | Path | None = PROJECT_ROOT / "GoogleNews-vectors-negative300.bin",
     pretrained_w2v_name: str = "word2vec-google-news-300",
     allow_pretrained_w2v_download: bool = False,
+    glove_path: str | Path = DEFAULT_GLOVE_PATH,
+    glove_url: str = DEFAULT_GLOVE_URL,
+    glove_zip_path: str | Path = DEFAULT_GLOVE_ZIP_PATH,
+    allow_glove_download: bool = False,
     force: bool = False,
     transformer_batch_size: int = 256,
     text_batch_size: int = 8192,
@@ -791,9 +888,13 @@ def write_all_embeddings(
     if run_glove:
         results["glove"] = write_glove_embeddings(
             processed_path=processed_path,
+            glove_path=glove_path,
             output_path=embedding_dir / "glove.npy",
             text_batch_size=text_batch_size,
             force=force,
+            allow_download=allow_glove_download,
+            glove_url=glove_url,
+            glove_zip_path=glove_zip_path,
         )
     if run_sbert:
         results["sbert"] = write_transformer_embeddings(
@@ -1740,18 +1841,37 @@ def run_full_linear_probe_for_embeddings(
     return merged_metrics
 
 
-def _duration_to_seconds(value: str) -> int | None:
-    parts = value.split(":")
-    if not all(part.isdigit() for part in parts):
+def _duration_to_seconds(value: str) -> float | None:
+    parts = value.strip().split(":")
+    try:
+        if len(parts) == 3:
+            hours, minutes, seconds = int(parts[0]), int(parts[1]), float(parts[2])
+        elif len(parts) == 2:
+            hours, minutes, seconds = 0, int(parts[0]), float(parts[1])
+        else:
+            return None
+    except ValueError:
         return None
-    numbers = [int(part) for part in parts]
-    if len(numbers) == 3:
-        hours, minutes, seconds = numbers
-    elif len(numbers) == 2:
-        hours, minutes, seconds = 0, numbers[0], numbers[1]
-    else:
+    return round(hours * 3600 + minutes * 60 + seconds, 2)
+
+
+def _parse_time_v_elapsed_line(line: str) -> str | None:
+    if "Elapsed (wall clock) time" not in line:
         return None
-    return hours * 3600 + minutes * 60 + seconds
+    if "):" in line:
+        return line.rsplit("):", 1)[1].strip()
+    match = re.search(r"Elapsed \(wall clock\) time.*?:\s*([0-9:.]+)\s*$", line)
+    return match.group(1).strip() if match else None
+
+
+def _log_matches_encoder(log_path: Path, text: str, encoder: str, labels: list[str]) -> bool:
+    lower_name = log_path.name.lower()
+    lower_text = text.lower()
+    return (
+        encoder.lower() in lower_name
+        or f"--encoders {encoder.lower()}" in lower_text
+        or any(label.lower() in lower_text for label in labels)
+    )
 
 
 def _parse_encoder_runtime_from_logs(logs_dir: str | Path, encoder: str) -> dict | None:
@@ -1767,8 +1887,21 @@ def _parse_encoder_runtime_from_logs(logs_dir: str | Path, encoder: str) -> dict
     }
     labels = patterns.get(encoder, [f"Encode {encoder}"])
     best: dict | None = None
-    for log_path in sorted(logs_dir.glob("*.log")):
+    for log_path in sorted(logs_dir.glob("*.log"), key=lambda path: path.stat().st_mtime):
         text = log_path.read_text(encoding="utf-8", errors="ignore").replace("\r", "\n")
+        if not _log_matches_encoder(log_path, text, encoder, labels):
+            continue
+        for line in text.splitlines():
+            elapsed_text = _parse_time_v_elapsed_line(line)
+            if not elapsed_text:
+                continue
+            best = {
+                "elapsed": elapsed_text,
+                "elapsed_seconds": _duration_to_seconds(elapsed_text),
+                "throughput_per_second": None,
+                "log_path": str(log_path),
+                "source": "/usr/bin/time -v",
+            }
         for line in text.splitlines():
             if not any(label in line for label in labels) or "100%" not in line:
                 continue
@@ -1782,6 +1915,7 @@ def _parse_encoder_runtime_from_logs(logs_dir: str | Path, encoder: str) -> dict
                 "elapsed_seconds": elapsed_seconds,
                 "throughput_per_second": float(match.group(2)),
                 "log_path": str(log_path),
+                "source": "tqdm",
             }
     return best
 
@@ -1814,6 +1948,9 @@ def run_full_efficiency_summary(
         file_size = emb_path.stat().st_size
         runtime = _parse_encoder_runtime_from_logs(logs_dir, encoder)
         run_summary = embedding_run_summary.get(encoder, {})
+        device = run_summary.get("device")
+        if device is None and encoder in {"tfidf", "w2v", "glove"}:
+            device = "cpu"
         encoder_metrics[encoder.upper()] = {
             "embedding_path": str(emb_path),
             "meta_path": str(meta_path),
@@ -1824,7 +1961,7 @@ def run_full_efficiency_summary(
             "file_size_bytes": int(file_size),
             "file_size_human": _human_bytes(file_size),
             "bytes_per_row": float(file_size / max(1, shape[0])),
-            "device": run_summary.get("device"),
+            "device": device,
             "parsed_runtime": runtime,
         }
 

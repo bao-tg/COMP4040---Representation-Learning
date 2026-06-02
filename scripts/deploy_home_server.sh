@@ -105,6 +105,7 @@ BASE_EXCLUDES=(
   "--exclude=experiments/"
   "--exclude=data/embeddings/"
   "--exclude=data/models/"
+  "--exclude=glove.840B.300d.zip"
 )
 
 MODE_EXCLUDES=()

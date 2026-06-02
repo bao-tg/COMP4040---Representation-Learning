@@ -1,0 +1,247 @@
+{
+  "source_run": "server_full",
+  "privacy": {
+    "contains_raw_review_rows": false,
+    "contains_absolute_local_paths": false,
+    "contains_large_embedding_arrays": false,
+    "excluded_raw_artifacts": [
+      "data/embeddings/*.npy",
+      "experiments/server_full/anomaly/*_anomalies.csv",
+      "experiments/server_full/anomaly/*_inconsistencies.csv",
+      "experiments/server_full/umap/*_coords.npy",
+      "experiments/server_full/clustering/*_cluster_assignments.npy",
+      "logs/*.log"
+    ]
+  },
+  "validation": {
+    "ok": true,
+    "processed_rows": 1946618,
+    "required_columns_present": true,
+    "missing_column_count": 0,
+    "errors": [],
+    "encoders": {
+      "TFIDF": {
+        "ok": true,
+        "shape": [
+          1946618,
+          300
+        ],
+        "file_size_bytes": 2335941728,
+        "file_size_human": "2.18 GB",
+        "meta": {
+          "kind": "tfidf_svd",
+          "rows_written": 1946618,
+          "total_rows": 1946618,
+          "dim": 300,
+          "complete": true
+        },
+        "errors": []
+      },
+      "W2V": {
+        "ok": true,
+        "shape": [
+          1946618,
+          300
+        ],
+        "file_size_bytes": 2335941728,
+        "file_size_human": "2.18 GB",
+        "meta": {
+          "kind": "pretrained_word2vec:GoogleNews-vectors-negative300.bin",
+          "rows_written": 1946618,
+          "total_rows": 1946618,
+          "dim": 300,
+          "complete": true
+        },
+        "errors": []
+      },
+      "GLOVE": {
+        "ok": true,
+        "shape": [
+          1946618,
+          300
+        ],
+        "file_size_bytes": 2335941728,
+        "file_size_human": "2.18 GB",
+        "meta": {
+          "kind": "glove",
+          "rows_written": 1946618,
+          "total_rows": 1946618,
+          "dim": 300,
+          "complete": true
+        },
+        "errors": []
+      },
+      "SBERT": {
+        "ok": true,
+        "shape": [
+          1946618,
+          384
+        ],
+        "file_size_bytes": 2990005376,
+        "file_size_human": "2.78 GB",
+        "meta": {
+          "kind": "all-MiniLM-L6-v2",
+          "rows_written": 1946618,
+          "total_rows": 1946618,
+          "dim": 384,
+          "complete": true
+        },
+        "errors": []
+      },
+      "BGE": {
+        "ok": true,
+        "shape": [
+          1946618,
+          1024
+        ],
+        "file_size_bytes": 7973347456,
+        "file_size_human": "7.43 GB",
+        "meta": {
+          "kind": "BAAI/bge-large-en-v1.5",
+          "rows_written": 1946618,
+          "total_rows": 1946618,
+          "dim": 1024,
+          "complete": true
+        },
+        "errors": []
+      }
+    }
+  },
+  "table": [
+    {
+      "encoder": "TFIDF",
+      "rows": 1946618,
+      "dim": 300,
+      "file_size": "2.18 GB",
+      "device": "cpu",
+      "embed_elapsed": "5:08.61",
+      "cluster_nmi": 0.2260748631482425,
+      "cluster_ari": 0.10714558892209476,
+      "silhouette": 0.001379766850732267,
+      "retrieval_mrr": 0.6906534235490344,
+      "precision@5": 0.5266400000000012,
+      "precision@10": 0.5152000000000005,
+      "precision@50": 0.48238000000000164,
+      "iso_anomalies": 19467,
+      "inconsistencies": 19466,
+      "linear_accuracy": 0.446751291983027,
+      "linear_macro_f1": 0.43505068371980815,
+      "linear_weighted_f1": 0.43464818159938795,
+      "umap_sample_size": 50000
+    },
+    {
+      "encoder": "W2V",
+      "rows": 1946618,
+      "dim": 300,
+      "file_size": "2.18 GB",
+      "device": "cpu",
+      "embed_elapsed": "2:30.93",
+      "cluster_nmi": 0.014409770504261236,
+      "cluster_ari": 0.010016274905698747,
+      "silhouette": 0.006386241409927607,
+      "retrieval_mrr": 0.7218463313691755,
+      "precision@5": 0.5800799999999997,
+      "precision@10": 0.5690000000000028,
+      "precision@50": 0.5460880000000027,
+      "iso_anomalies": 19550,
+      "inconsistencies": 19466,
+      "linear_accuracy": 0.4317663437137192,
+      "linear_macro_f1": 0.419645325024285,
+      "linear_weighted_f1": 0.41926216811301786,
+      "umap_sample_size": 50000
+    },
+    {
+      "encoder": "GLOVE",
+      "rows": 1946618,
+      "dim": 300,
+      "file_size": "2.18 GB",
+      "device": "cpu",
+      "embed_elapsed": "1:56.52",
+      "cluster_nmi": 0.029835854949391435,
+      "cluster_ari": 0.02302524415750418,
+      "silhouette": 0.0362086221575737,
+      "retrieval_mrr": 0.7417800031445108,
+      "precision@5": 0.5973200000000027,
+      "precision@10": 0.5902400000000044,
+      "precision@50": 0.5684960000000047,
+      "iso_anomalies": 19476,
+      "inconsistencies": 19466,
+      "linear_accuracy": 0.43297356443476387,
+      "linear_macro_f1": 0.4078964779513405,
+      "linear_weighted_f1": 0.4075426584507625,
+      "umap_sample_size": 50000
+    },
+    {
+      "encoder": "SBERT",
+      "rows": 1946618,
+      "dim": 384,
+      "file_size": "2.78 GB",
+      "device": "cuda",
+      "embed_elapsed": "3:01:27",
+      "cluster_nmi": 0.410484816674637,
+      "cluster_ari": 0.34765786634023094,
+      "silhouette": 0.015812978148460388,
+      "retrieval_mrr": 0.8187697961542643,
+      "precision@5": 0.7178800000000055,
+      "precision@10": 0.7123400000000041,
+      "precision@50": 0.6974520000000055,
+      "iso_anomalies": 19467,
+      "inconsistencies": 19466,
+      "linear_accuracy": 0.45555372902775065,
+      "linear_macro_f1": 0.44328254608635537,
+      "linear_weighted_f1": 0.4428435971193148,
+      "umap_sample_size": 50000
+    },
+    {
+      "encoder": "BGE",
+      "rows": 1946618,
+      "dim": 1024,
+      "file_size": "7.43 GB",
+      "device": "cuda",
+      "embed_elapsed": "65:56:44",
+      "cluster_nmi": 0.34202152725515333,
+      "cluster_ari": 0.2943077041469792,
+      "silhouette": 0.032396554946899414,
+      "retrieval_mrr": 0.8279065218307549,
+      "precision@5": 0.7299200000000036,
+      "precision@10": 0.7245600000000061,
+      "precision@50": 0.7133200000000085,
+      "iso_anomalies": 19467,
+      "inconsistencies": 19466,
+      "linear_accuracy": 0.5895911888298692,
+      "linear_macro_f1": 0.584426253375675,
+      "linear_weighted_f1": 0.5839122824909735,
+      "umap_sample_size": 50000
+    }
+  ],
+  "metric_files": {
+    "all_clustering_metrics.json": "metrics/all_clustering_metrics.json",
+    "all_retrieval_metrics.json": "metrics/all_retrieval_metrics.json",
+    "all_anomaly_metrics.json": "metrics/all_anomaly_metrics.json",
+    "all_linear_probe_metrics.json": "metrics/all_linear_probe_metrics.json",
+    "all_efficiency_metrics.json": "metrics/all_efficiency_metrics.json",
+    "all_umap_summary.json": "metrics/all_umap_summary.json",
+    "input_validation.json": "metrics/input_validation.json"
+  },
+  "figure_files": [
+    "figures/all_encoders_umap_category_grid.png",
+    "figures/all_encoders_umap_cluster_grid.png",
+    "figures/tfidf_iso_forest_scores.png",
+    "figures/w2v_iso_forest_scores.png",
+    "figures/glove_iso_forest_scores.png",
+    "figures/sbert_iso_forest_scores.png",
+    "figures/bge_iso_forest_scores.png",
+    "figures/tfidf_rating_inconsistency_residuals.png",
+    "figures/w2v_rating_inconsistency_residuals.png",
+    "figures/glove_rating_inconsistency_residuals.png",
+    "figures/sbert_rating_inconsistency_residuals.png",
+    "figures/bge_rating_inconsistency_residuals.png"
+  ],
+  "confusion_matrix_files": [
+    "metrics/confusion_matrices/tfidf_confusion_matrix.csv",
+    "metrics/confusion_matrices/w2v_confusion_matrix.csv",
+    "metrics/confusion_matrices/glove_confusion_matrix.csv",
+    "metrics/confusion_matrices/sbert_confusion_matrix.csv",
+    "metrics/confusion_matrices/bge_confusion_matrix.csv"
+  ]
+}

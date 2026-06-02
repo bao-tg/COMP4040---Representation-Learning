@@ -1,0 +1,152 @@
+{
+  "TFIDF": {
+    "target_column": "rating",
+    "model": "SGDClassifier(loss=log_loss, penalty=l2)",
+    "rows": 1946618,
+    "valid_rows": 1946618,
+    "train_rows": 1557294,
+    "test_rows": 389324,
+    "test_size": 0.2,
+    "epochs": 3,
+    "batch_size": 16384,
+    "classes": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "accuracy": 0.446751291983027,
+    "macro_f1": 0.43505068371980815,
+    "weighted_f1": 0.43464818159938795,
+    "per_class_f1": {
+      "1": 0.5422020194331015,
+      "2": 0.36784888827974604,
+      "3": 0.2979246380611384,
+      "4": 0.3940272384182027,
+      "5": 0.5732506344068522
+    },
+    "elapsed_seconds": 63.939542958993115,
+    "confusion_matrix_csv": "metrics/confusion_matrices/tfidf_confusion_matrix.csv"
+  },
+  "W2V": {
+    "target_column": "rating",
+    "model": "SGDClassifier(loss=log_loss, penalty=l2)",
+    "rows": 1946618,
+    "valid_rows": 1946618,
+    "train_rows": 1557294,
+    "test_rows": 389324,
+    "test_size": 0.2,
+    "epochs": 3,
+    "batch_size": 16384,
+    "classes": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "accuracy": 0.4317663437137192,
+    "macro_f1": 0.419645325024285,
+    "weighted_f1": 0.41926216811301786,
+    "per_class_f1": {
+      "1": 0.5220600827954386,
+      "2": 0.38838373766391965,
+      "3": 0.27354982140959727,
+      "4": 0.33250728753173,
+      "5": 0.5817256957207394
+    },
+    "elapsed_seconds": 23.150436112016905,
+    "confusion_matrix_csv": "metrics/confusion_matrices/w2v_confusion_matrix.csv"
+  },
+  "GLOVE": {
+    "target_column": "rating",
+    "model": "SGDClassifier(loss=log_loss, penalty=l2)",
+    "rows": 1946618,
+    "valid_rows": 1946618,
+    "train_rows": 1557294,
+    "test_rows": 389324,
+    "test_size": 0.2,
+    "epochs": 3,
+    "batch_size": 16384,
+    "classes": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "accuracy": 0.43297356443476387,
+    "macro_f1": 0.4078964779513405,
+    "weighted_f1": 0.4075426584507625,
+    "per_class_f1": {
+      "1": 0.5236737833452915,
+      "2": 0.41124778652121624,
+      "3": 0.2124784386227402,
+      "4": 0.29721025624130004,
+      "5": 0.5948721250261544
+    },
+    "elapsed_seconds": 68.83927354599291,
+    "confusion_matrix_csv": "metrics/confusion_matrices/glove_confusion_matrix.csv"
+  },
+  "SBERT": {
+    "target_column": "rating",
+    "model": "SGDClassifier(loss=log_loss, penalty=l2)",
+    "rows": 1946618,
+    "valid_rows": 1946618,
+    "train_rows": 1557294,
+    "test_rows": 389324,
+    "test_size": 0.2,
+    "epochs": 3,
+    "batch_size": 16384,
+    "classes": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "accuracy": 0.45555372902775065,
+    "macro_f1": 0.44328254608635537,
+    "weighted_f1": 0.4428435971193148,
+    "per_class_f1": {
+      "1": 0.5661808655043934,
+      "2": 0.3674190916508023,
+      "3": 0.30927533104160565,
+      "4": 0.37545406112268126,
+      "5": 0.5980833811122942
+    },
+    "elapsed_seconds": 80.13093034698977,
+    "confusion_matrix_csv": "metrics/confusion_matrices/sbert_confusion_matrix.csv"
+  },
+  "BGE": {
+    "target_column": "rating",
+    "model": "SGDClassifier(loss=log_loss, penalty=l2)",
+    "rows": 1946618,
+    "valid_rows": 1946618,
+    "train_rows": 1557294,
+    "test_rows": 389324,
+    "test_size": 0.2,
+    "epochs": 3,
+    "batch_size": 16384,
+    "classes": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "accuracy": 0.5895911888298692,
+    "macro_f1": 0.584426253375675,
+    "weighted_f1": 0.5839122824909735,
+    "per_class_f1": {
+      "1": 0.6733857212111056,
+      "2": 0.48765227973174957,
+      "3": 0.49543306015574523,
+      "4": 0.5352318364366557,
+      "5": 0.7304283693431186
+    },
+    "elapsed_seconds": 202.69936209899606,
+    "confusion_matrix_csv": "metrics/confusion_matrices/bge_confusion_matrix.csv"
+  }
+}

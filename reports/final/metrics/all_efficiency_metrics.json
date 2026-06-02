@@ -1,0 +1,159 @@
+{
+  "processed_rows": 1946618,
+  "processed_summary": {
+    "chunksize": 100000,
+    "min_length": 10,
+    "max_tokens": 256,
+    "deduplicate": true,
+    "raw_rows": 2000000,
+    "kept_rows": 1946618,
+    "dropped_empty_or_short": 52617,
+    "dropped_duplicates": 765,
+    "raw_rows_by_category": {
+      "Books": 400000,
+      "Electronics": 400000,
+      "Kindle_Store": 400000,
+      "Movies_and_TV": 400000,
+      "Sports_and_Outdoors": 400000
+    },
+    "kept_rows_by_category": {
+      "Books": 392155,
+      "Electronics": 390822,
+      "Kindle_Store": 394313,
+      "Movies_and_TV": 378924,
+      "Sports_and_Outdoors": 390404
+    }
+  },
+  "encoders": {
+    "W2V": {
+      "kind": "pretrained_word2vec:GoogleNews-vectors-negative300.bin",
+      "shape": [
+        1946618,
+        300
+      ],
+      "rows": 1946618,
+      "dim": 300,
+      "file_size_bytes": 2335941728,
+      "file_size_human": "2.18 GB",
+      "bytes_per_row": 1200.0000657550686,
+      "device": "cpu",
+      "meta": {
+        "kind": "pretrained_word2vec:GoogleNews-vectors-negative300.bin",
+        "rows_written": 1946618,
+        "total_rows": 1946618,
+        "dim": 300,
+        "complete": true
+      },
+      "parsed_runtime": {
+        "elapsed": "2:30.93",
+        "elapsed_seconds": 150.93,
+        "throughput_per_second": null,
+        "source": "/usr/bin/time -v"
+      }
+    },
+    "TFIDF": {
+      "kind": "tfidf_svd",
+      "shape": [
+        1946618,
+        300
+      ],
+      "rows": 1946618,
+      "dim": 300,
+      "file_size_bytes": 2335941728,
+      "file_size_human": "2.18 GB",
+      "bytes_per_row": 1200.0000657550686,
+      "device": "cpu",
+      "meta": {
+        "kind": "tfidf_svd",
+        "rows_written": 1946618,
+        "total_rows": 1946618,
+        "dim": 300,
+        "complete": true
+      },
+      "parsed_runtime": {
+        "elapsed": "5:08.61",
+        "elapsed_seconds": 308.61,
+        "throughput_per_second": null,
+        "source": "/usr/bin/time -v"
+      }
+    },
+    "GLOVE": {
+      "kind": "glove",
+      "shape": [
+        1946618,
+        300
+      ],
+      "rows": 1946618,
+      "dim": 300,
+      "file_size_bytes": 2335941728,
+      "file_size_human": "2.18 GB",
+      "bytes_per_row": 1200.0000657550686,
+      "device": "cpu",
+      "meta": {
+        "kind": "glove",
+        "rows_written": 1946618,
+        "total_rows": 1946618,
+        "dim": 300,
+        "complete": true
+      },
+      "parsed_runtime": {
+        "elapsed": "1:56.52",
+        "elapsed_seconds": 116.52,
+        "throughput_per_second": null,
+        "source": "/usr/bin/time -v"
+      }
+    },
+    "SBERT": {
+      "kind": "all-MiniLM-L6-v2",
+      "shape": [
+        1946618,
+        384
+      ],
+      "rows": 1946618,
+      "dim": 384,
+      "file_size_bytes": 2990005376,
+      "file_size_human": "2.78 GB",
+      "bytes_per_row": 1536.0000657550686,
+      "device": "cuda",
+      "meta": {
+        "kind": "all-MiniLM-L6-v2",
+        "rows_written": 1946618,
+        "total_rows": 1946618,
+        "dim": 384,
+        "complete": true
+      },
+      "parsed_runtime": {
+        "elapsed": "3:01:27",
+        "elapsed_seconds": 10887.0,
+        "throughput_per_second": 178.8,
+        "source": "tqdm"
+      }
+    },
+    "BGE": {
+      "kind": "BAAI/bge-large-en-v1.5",
+      "shape": [
+        1946618,
+        1024
+      ],
+      "rows": 1946618,
+      "dim": 1024,
+      "file_size_bytes": 7973347456,
+      "file_size_human": "7.43 GB",
+      "bytes_per_row": 4096.000065755068,
+      "device": "cuda",
+      "meta": {
+        "kind": "BAAI/bge-large-en-v1.5",
+        "rows_written": 1946618,
+        "total_rows": 1946618,
+        "dim": 1024,
+        "complete": true
+      },
+      "parsed_runtime": {
+        "elapsed": "65:56:44",
+        "elapsed_seconds": 237404.0,
+        "throughput_per_second": 8.2,
+        "source": "tqdm"
+      }
+    }
+  }
+}

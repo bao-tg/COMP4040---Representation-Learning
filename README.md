@@ -1,63 +1,110 @@
 # COMP4040 Representation Learning
 
 This repository contains a reproducible representation-learning pipeline for
-Amazon review text. It compares text encoders on clustering, semantic retrieval,
-anomaly detection, linear probing, UMAP visualization, and runtime efficiency.
+Amazon review text. It compares classical sparse/static-vector representations
+and transformer sentence embeddings across clustering, retrieval, anomaly
+detection, linear probing, UMAP visualization, and runtime efficiency.
 
-## Full-Run Artifacts
+## Project Status
 
-The full experiment has been run on the five-encoder setup. The generated
-dataset, embeddings, logs, and experiment artifacts are local/server artifacts
-and are intentionally not tracked in Git.
+The full five-encoder experiment has been completed on the full processed
+corpus.
 
-Summary artifacts:
+| Item | Status |
+| --- | --- |
+| Raw input scale | 2,000,000 Amazon review rows |
+| Processed corpus | 1,946,618 cleaned rows |
+| Encoders evaluated | TF-IDF, Word2Vec, GloVe, SBERT, BGE-large |
+| Main run profile | `server_full` |
+| Validation status | OK |
+| Commit-safe report package | `reports/final/` |
 
-```text
-experiments/server_full/summary/final_analysis_summary.md
-experiments/server_full/summary/final_analysis_summary.csv
-experiments/server_full/summary/final_analysis_summary.json
-```
-
-The full processed corpus contains `1,946,618` cleaned review rows from
-`2,000,000` raw rows across five Amazon review categories.
+Generated datasets, embeddings, raw experiment outputs, and logs are intentionally
+kept out of Git. The sanitized report outputs under `reports/final/` are tracked
+for review and report writing.
 
 ## Encoders
 
-- TF-IDF + TruncatedSVD
-- pretrained Word2Vec Google News 300D (`w2v`)
-- GloVe 840B 300D (`glove`)
-- SBERT `all-MiniLM-L6-v2`
-- BGE-large `BAAI/bge-large-en-v1.5`
+| Encoder | Representation | Dimension | Notes |
+| --- | --- | ---: | --- |
+| TF-IDF | TF-IDF + TruncatedSVD | 300 | Sparse lexical baseline reduced to dense vectors |
+| W2V | Google News Word2Vec | 300 | Pretrained static word vectors averaged per review |
+| GloVe | GloVe 840B | 300 | Pretrained static word vectors averaged per review |
+| SBERT | `all-MiniLM-L6-v2` | 384 | SentenceTransformer encoder |
+| BGE | `BAAI/bge-large-en-v1.5` | 1024 | Large SentenceTransformer encoder |
 
-## What Is Tracked
+The current report treats Word2Vec and GloVe as pretrained static-vector
+baselines; neither one is trained from scratch on the Amazon review corpus.
 
-Commit source, notebooks, scripts, requirements, and docs:
+## Evaluation Tasks
+
+| Task | Metrics / Outputs |
+| --- | --- |
+| Clustering | Normalized Mutual Information, Adjusted Rand Index, Silhouette |
+| Retrieval | Mean Reciprocal Rank, Precision@5, Precision@10, Precision@50 |
+| Anomaly detection | Isolation Forest anomaly count, rating inconsistency count |
+| Linear probe | Accuracy, macro F1, weighted F1, confusion matrices |
+| UMAP | Category-colored and cluster-colored 2D projections |
+| Efficiency | embedding shape, file size, runtime, device/backend |
+
+## Result Snapshot
+
+Full precision tables and machine-readable metrics are available in
+`reports/final/`.
+
+| Encoder | Dim | Device | Embed Time | NMI | ARI | MRR | P@5 | Acc. | Macro F1 |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| TF-IDF | 300 | CPU | 5:08.61 | 0.226 | 0.107 | 0.691 | 0.527 | 0.447 | 0.435 |
+| W2V | 300 | CPU | 2:30.93 | 0.014 | 0.010 | 0.722 | 0.580 | 0.432 | 0.420 |
+| GloVe | 300 | CPU | 1:56.52 | 0.030 | 0.023 | 0.742 | 0.597 | 0.433 | 0.408 |
+| SBERT | 384 | CUDA | 3:01:27 | 0.410 | 0.348 | 0.819 | 0.718 | 0.456 | 0.443 |
+| BGE | 1024 | CUDA | 65:56:44 | 0.342 | 0.294 | 0.828 | 0.730 | 0.590 | 0.584 |
+
+Interpretation notes:
+
+- BGE is strongest on retrieval and linear probing in the current full run.
+- SBERT is strongest on clustering NMI and ARI.
+- Static-vector baselines are much cheaper to embed, but are weaker on the main
+  retrieval and linear-probe outcomes.
+- Anomaly counts are controlled by the configured contamination threshold and
+  should not be interpreted as a direct encoder quality ranking.
+
+## Report Artifacts
+
+Use these files for the final report:
 
 ```text
-README.md
-StudyGuide.md
-SERVER_RUNBOOK.md
-.env.example
-requirements.txt
-notesbook/
-scripts/
-src/
+reports/final/final_analysis_summary.md
+reports/final/final_analysis_summary.csv
+reports/final/final_analysis_summary.json
+reports/final/metrics/
+reports/final/figures/
 ```
 
-Do not commit generated or local-only files:
+The report package intentionally excludes:
+
+- full embedding arrays under `data/embeddings/`
+- raw and processed review data
+- runtime logs containing machine-specific paths
+- anomaly row CSVs that include review text fields
+- UMAP coordinate arrays and clustering assignment arrays
+
+## Repository Structure
 
 ```text
-.env
-data/
-experiments/
-logs/
-glove.840B.300d.txt
-GoogleNews-vectors-negative300.bin
+src/full_pipeline.py        # full/sample streaming pipeline and analysis suite
+src/preprocess.py           # text cleaning helpers
+src/encoders.py             # encoder wrappers
+src/cluster.py              # clustering helpers
+src/retrieval.py            # retrieval helpers
+src/anomaly.py              # anomaly detection helpers
+src/metrics.py              # metric utilities
+src/visualize.py            # plotting helpers
+scripts/run_server_full.py  # resumable full pipeline entrypoint
+scripts/run_server_sample.py # sample/smoke pipeline entrypoint
+reports/final/              # commit-safe result package for report writing
+notesbook/                  # explanatory notebooks mirroring the pipeline
 ```
-
-The full dataset, embeddings, and result artifacts are intentionally ignored by
-Git because they are large and machine-specific. They can be regenerated with
-the commands below.
 
 ## Setup
 
@@ -73,7 +120,7 @@ Optional Hugging Face token:
 HF_TOKEN=...
 ```
 
-## Data
+## Data And External Models
 
 Place raw Amazon review JSONL files under:
 
@@ -81,28 +128,28 @@ Place raw Amazon review JSONL files under:
 data/raw/
 ```
 
-The full pipeline discovers all matching raw files and streams them into:
+The full pipeline streams all matching raw files into:
 
 ```text
 data/processed/cleaned_reviews.parquet
 ```
 
-External pretrained static-vector files are optional and not committed:
+External pretrained static-vector files are not committed:
 
 ```text
-glove.840B.300d.txt                 # required to rebuild glove.npy
-GoogleNews-vectors-negative300.bin  # required to rebuild w2v.npy from a local file
+glove.840B.300d.txt                 # required to rebuild GloVe locally
+GoogleNews-vectors-negative300.bin  # required to rebuild W2V from a local file
 ```
 
-The Word2Vec model can also be downloaded into the local gensim cache by
-passing `--download-pretrained-w2v`.
+Both W2V and GloVe are pretrained file-backed encoders in this project. GloVe is
+loaded from `glove.840B.300d.txt` at the repository root, and can be downloaded
+with `--download-glove` if the file is missing. W2V is loaded from
+`GoogleNews-vectors-negative300.bin` when `--pretrained-w2v-path` is provided,
+and can also be downloaded through gensim with `--download-pretrained-w2v`.
 
-The current report setup treats both Word2Vec and GloVe as pretrained static
-baselines. It does not self-train Word2Vec on the Amazon corpus.
+## Reproduce The Full Pipeline
 
-## Main Full-Run Commands
-
-Preprocess raw JSONL:
+Preprocess raw JSONL files:
 
 ```bash
 python scripts/run_server_full.py --stage preprocess --force-preprocess
@@ -114,29 +161,25 @@ Build embeddings:
 python scripts/run_server_full.py \
   --stage embeddings \
   --encoders tfidf,w2v,glove,sbert,bge \
-  --download-pretrained-w2v \
+  --pretrained-w2v-path GoogleNews-vectors-negative300.bin \
+  --glove-path glove.840B.300d.txt \
   --transformer-batch-size 32
 ```
 
-Rebuild only the Word2Vec embedding from pretrained Google News vectors:
+If the pretrained static-vector files are missing, use explicit download flags:
 
 ```bash
 python scripts/run_server_full.py \
   --stage embeddings \
-  --encoders w2v \
+  --encoders tfidf,w2v,glove,sbert,bge \
   --download-pretrained-w2v \
-  --force-embeddings
+  --download-glove \
+  --transformer-batch-size 32
 ```
 
-Using a local Google News file:
-
-```bash
-python scripts/run_server_full.py \
-  --stage embeddings \
-  --encoders w2v \
-  --pretrained-w2v-path GoogleNews-vectors-negative300.bin \
-  --force-embeddings
-```
+`--download-glove` downloads and extracts the Stanford `glove.840B.300d.zip`
+archive. This is intentionally opt-in because the zip is about 2 GB and the
+extracted text file is much larger.
 
 Run the full analysis suite without rebuilding embeddings:
 
@@ -149,7 +192,7 @@ python scripts/run_server_full.py \
   --retrieval-queries 5000
 ```
 
-To redraw UMAP with existing coordinates:
+Refresh only UMAP plots and summary from existing artifacts:
 
 ```bash
 python scripts/run_server_full.py \
@@ -159,38 +202,13 @@ python scripts/run_server_full.py \
   --umap-sample-size 50000
 ```
 
-`--force-umap` recomputes UMAP coordinates instead of redrawing from existing
-coordinate files.
-
-## Output Layout
-
-Generated outputs are written under:
-
-```text
-data/processed/
-data/embeddings/
-data/models/
-experiments/server_full/
-logs/
-```
-
-The final summary table is:
-
-```text
-experiments/server_full/summary/final_analysis_summary.md
-```
-
-UMAP comparison figures are:
-
-```text
-experiments/server_full/figures/all_encoders_umap_category_grid.png
-experiments/server_full/figures/all_encoders_umap_cluster_grid.png
-```
+Use `--force-embeddings` or `--force-umap` only when intentionally replacing
+existing artifacts.
 
 ## Notebook Workflow
 
-The notebooks mirror the pipeline stages and are useful for explanation and
-interactive checks:
+The notebooks mirror the pipeline stages and are useful for explanation,
+inspection, and small interactive checks:
 
 ```text
 notesbook/01_eda.ipynb
@@ -201,24 +219,48 @@ notesbook/05_retrieval.ipynb
 notesbook/06_anomaly.ipynb
 ```
 
-`RUN_MODE = "sample"` is for quick local checks. `RUN_MODE = "full"` is for the
-full dataset. Long full runs use `scripts/run_server_full.py` because it is
-resumable and validates existing artifacts.
+Use `RUN_MODE = "sample"` for quick local checks and `RUN_MODE = "full"` for the
+full dataset. Long full runs should use `scripts/run_server_full.py` because it
+is resumable and validates existing artifacts.
 
-## Project Structure
+## Operational Notes
 
-```text
-src/full_pipeline.py        # full/sample streaming pipeline and analysis suite
-src/preprocess.py           # text cleaning helpers
-src/encoders.py             # encoder wrappers
-src/cluster.py              # clustering helpers
-src/retrieval.py            # retrieval helpers
-src/anomaly.py              # anomaly detection helpers
-src/metrics.py              # metric utilities
-src/visualize.py            # plotting helpers
-scripts/run_server_full.py  # resumable full pipeline entrypoint
-scripts/run_server_sample.py# sample/smoke pipeline entrypoint
-```
+- `SERVER_RUNBOOK.md` contains server deployment, tmux, runtime logging, and
+  artifact pull-back instructions.
+- `StudyGuide.md` contains the study-oriented explanation of encoders, metrics,
+  and interpretation.
+- `reports/final/README.md` documents exactly which report artifacts are safe to
+  commit.
 
-See `SERVER_RUNBOOK.md` for server deployment and long-run instructions.
-See `StudyGuide.md` for experiment definitions, metrics, and interpretation.
+## References
+
+Dataset:
+
+- Hou, Y., Li, J., He, Z., Yan, A., Chen, X., & McAuley, J. (2024). *Bridging
+  Language and Items for Retrieval and Recommendation*. Amazon Reviews'23.
+  https://amazon-reviews-2023.github.io/
+
+Encoders and pretrained models:
+
+- Mikolov, T., Chen, K., Corrado, G., & Dean, J. (2013). *Efficient Estimation
+  of Word Representations in Vector Space*. https://arxiv.org/abs/1301.3781
+- Pennington, J., Socher, R., & Manning, C. D. (2014). *GloVe: Global Vectors
+  for Word Representation*. https://nlp.stanford.edu/projects/glove/
+- Reimers, N., & Gurevych, I. (2019). *Sentence-BERT: Sentence Embeddings using
+  Siamese BERT-Networks*. https://arxiv.org/abs/1908.10084
+- SentenceTransformers. `all-MiniLM-L6-v2` model card.
+  https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
+- BAAI. `bge-large-en-v1.5` model card.
+  https://huggingface.co/BAAI/bge-large-en-v1.5
+
+Methods and tooling:
+
+- McInnes, L., Healy, J., & Melville, J. (2018). *UMAP: Uniform Manifold
+  Approximation and Projection for Dimension Reduction*.
+  https://arxiv.org/abs/1802.03426
+- Johnson, J., Douze, M., & Jegou, H. (2017). *Billion-scale similarity search
+  with GPUs*. https://arxiv.org/abs/1702.08734
+- Liu, F. T., Ting, K. M., & Zhou, Z.-H. (2008). *Isolation Forest*.
+  https://doi.org/10.1109/ICDM.2008.17
+- scikit-learn documentation for TF-IDF, TruncatedSVD, clustering metrics,
+  classification metrics, and IsolationForest. https://scikit-learn.org/stable/

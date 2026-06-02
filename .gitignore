@@ -54,6 +54,7 @@ lightning_logs/
 
 # Large external vectors/models
 glove.840B.300d.txt
+glove.840B.300d.zip
 GoogleNews-vectors-negative300.bin
 GoogleNews-vectors-negative300.bin.gz
 word2vec-google-news-300*
