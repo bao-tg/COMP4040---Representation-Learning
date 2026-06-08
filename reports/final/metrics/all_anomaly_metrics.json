@@ -1,0 +1,70 @@
+{
+  "TFIDF": {
+    "rows": 1946618,
+    "contamination": 0.01,
+    "isolation_fit_sample_size": 200000,
+    "iso_anomaly_count": 19467,
+    "iso_score_threshold": 0.00028238946106284857,
+    "inconsistency_count": 19466,
+    "rating_residual_threshold": 2.489581346511841,
+    "figures": {
+      "isolation_forest_scores": "figures/tfidf_iso_forest_scores.png",
+      "rating_inconsistency_residuals": "figures/tfidf_rating_inconsistency_residuals.png"
+    }
+  },
+  "W2V": {
+    "rows": 1946618,
+    "contamination": 0.01,
+    "isolation_fit_sample_size": 200000,
+    "outlier_model": "IsolationForest",
+    "rating_inconsistency_model": "SGDRegressor(loss=squared_error, penalty=l2)",
+    "rating_inconsistency_epochs": 3,
+    "iso_anomaly_count": 19550,
+    "iso_score_threshold": 0.00011792125587817281,
+    "inconsistency_count": 19466,
+    "rating_residual_threshold": 2.5537962913513184,
+    "figures": {
+      "isolation_forest_scores": "figures/w2v_iso_forest_scores.png",
+      "rating_inconsistency_residuals": "figures/w2v_rating_inconsistency_residuals.png"
+    }
+  },
+  "GLOVE": {
+    "rows": 1946618,
+    "contamination": 0.01,
+    "isolation_fit_sample_size": 200000,
+    "iso_anomaly_count": 19476,
+    "iso_score_threshold": -0.0006219882052391768,
+    "inconsistency_count": 19466,
+    "rating_residual_threshold": 2.587254285812378,
+    "figures": {
+      "isolation_forest_scores": "figures/glove_iso_forest_scores.png",
+      "rating_inconsistency_residuals": "figures/glove_rating_inconsistency_residuals.png"
+    }
+  },
+  "SBERT": {
+    "rows": 1946618,
+    "contamination": 0.01,
+    "isolation_fit_sample_size": 200000,
+    "iso_anomaly_count": 19467,
+    "iso_score_threshold": -2.6563006031210534e-05,
+    "inconsistency_count": 19466,
+    "rating_residual_threshold": 2.562476873397827,
+    "figures": {
+      "isolation_forest_scores": "figures/sbert_iso_forest_scores.png",
+      "rating_inconsistency_residuals": "figures/sbert_rating_inconsistency_residuals.png"
+    }
+  },
+  "BGE": {
+    "rows": 1946618,
+    "contamination": 0.01,
+    "isolation_fit_sample_size": 200000,
+    "iso_anomaly_count": 19467,
+    "iso_score_threshold": 5.355730536393821e-05,
+    "inconsistency_count": 19466,
+    "rating_residual_threshold": 2.1794939041137695,
+    "figures": {
+      "isolation_forest_scores": "figures/bge_iso_forest_scores.png",
+      "rating_inconsistency_residuals": "figures/bge_rating_inconsistency_residuals.png"
+    }
+  }
+}

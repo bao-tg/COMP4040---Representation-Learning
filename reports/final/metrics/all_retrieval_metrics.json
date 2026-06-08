@@ -1,0 +1,42 @@
+{
+  "TFIDF": {
+    "mrr": 0.6906534235490344,
+    "precision@5": 0.5266400000000012,
+    "precision@10": 0.5152000000000005,
+    "precision@50": 0.48238000000000164,
+    "query_sample_size": 5000,
+    "label_column": "category"
+  },
+  "W2V": {
+    "mrr": 0.7218463313691755,
+    "precision@5": 0.5800799999999997,
+    "precision@10": 0.5690000000000028,
+    "precision@50": 0.5460880000000027,
+    "query_sample_size": 5000,
+    "label_column": "category"
+  },
+  "GLOVE": {
+    "mrr": 0.7417800031445108,
+    "precision@5": 0.5973200000000027,
+    "precision@10": 0.5902400000000044,
+    "precision@50": 0.5684960000000047,
+    "query_sample_size": 5000,
+    "label_column": "category"
+  },
+  "SBERT": {
+    "mrr": 0.8187697961542643,
+    "precision@5": 0.7178800000000055,
+    "precision@10": 0.7123400000000041,
+    "precision@50": 0.6974520000000055,
+    "query_sample_size": 5000,
+    "label_column": "category"
+  },
+  "BGE": {
+    "mrr": 0.8279065218307549,
+    "precision@5": 0.7299200000000036,
+    "precision@10": 0.7245600000000061,
+    "precision@50": 0.7133200000000085,
+    "query_sample_size": 5000,
+    "label_column": "category"
+  }
+}

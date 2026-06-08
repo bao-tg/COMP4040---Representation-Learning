@@ -1,0 +1,42 @@
+{
+  "TFIDF": {
+    "nmi": 0.2260748631482425,
+    "ari": 0.10714558892209476,
+    "silhouette": 0.001379766850732267,
+    "silhouette_sample_size": 20000,
+    "label_column": "category",
+    "n_clusters": 5
+  },
+  "W2V": {
+    "nmi": 0.014409770504261236,
+    "ari": 0.010016274905698747,
+    "silhouette": 0.006386241409927607,
+    "silhouette_sample_size": 20000,
+    "label_column": "category",
+    "n_clusters": 5
+  },
+  "GLOVE": {
+    "nmi": 0.029835854949391435,
+    "ari": 0.02302524415750418,
+    "silhouette": 0.0362086221575737,
+    "silhouette_sample_size": 20000,
+    "label_column": "category",
+    "n_clusters": 5
+  },
+  "SBERT": {
+    "nmi": 0.410484816674637,
+    "ari": 0.34765786634023094,
+    "silhouette": 0.015812978148460388,
+    "silhouette_sample_size": 20000,
+    "label_column": "category",
+    "n_clusters": 5
+  },
+  "BGE": {
+    "nmi": 0.34202152725515333,
+    "ari": 0.2943077041469792,
+    "silhouette": 0.032396554946899414,
+    "silhouette_sample_size": 20000,
+    "label_column": "category",
+    "n_clusters": 5
+  }
+}

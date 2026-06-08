@@ -1,0 +1,94 @@
+{
+  "ok": true,
+  "processed_rows": 1946618,
+  "required_columns_present": true,
+  "missing_column_count": 0,
+  "errors": [],
+  "encoders": {
+    "TFIDF": {
+      "ok": true,
+      "shape": [
+        1946618,
+        300
+      ],
+      "file_size_bytes": 2335941728,
+      "file_size_human": "2.18 GB",
+      "meta": {
+        "kind": "tfidf_svd",
+        "rows_written": 1946618,
+        "total_rows": 1946618,
+        "dim": 300,
+        "complete": true
+      },
+      "errors": []
+    },
+    "W2V": {
+      "ok": true,
+      "shape": [
+        1946618,
+        300
+      ],
+      "file_size_bytes": 2335941728,
+      "file_size_human": "2.18 GB",
+      "meta": {
+        "kind": "pretrained_word2vec:GoogleNews-vectors-negative300.bin",
+        "rows_written": 1946618,
+        "total_rows": 1946618,
+        "dim": 300,
+        "complete": true
+      },
+      "errors": []
+    },
+    "GLOVE": {
+      "ok": true,
+      "shape": [
+        1946618,
+        300
+      ],
+      "file_size_bytes": 2335941728,
+      "file_size_human": "2.18 GB",
+      "meta": {
+        "kind": "glove",
+        "rows_written": 1946618,
+        "total_rows": 1946618,
+        "dim": 300,
+        "complete": true
+      },
+      "errors": []
+    },
+    "SBERT": {
+      "ok": true,
+      "shape": [
+        1946618,
+        384
+      ],
+      "file_size_bytes": 2990005376,
+      "file_size_human": "2.78 GB",
+      "meta": {
+        "kind": "all-MiniLM-L6-v2",
+        "rows_written": 1946618,
+        "total_rows": 1946618,
+        "dim": 384,
+        "complete": true
+      },
+      "errors": []
+    },
+    "BGE": {
+      "ok": true,
+      "shape": [
+        1946618,
+        1024
+      ],
+      "file_size_bytes": 7973347456,
+      "file_size_human": "7.43 GB",
+      "meta": {
+        "kind": "BAAI/bge-large-en-v1.5",
+        "rows_written": 1946618,
+        "total_rows": 1946618,
+        "dim": 1024,
+        "complete": true
+      },
+      "errors": []
+    }
+  }
+}

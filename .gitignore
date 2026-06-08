@@ -1,7 +1,91 @@
-# Ignore dataset
-data/
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+.ssh/
+*.pem
+*.key
+id_rsa
+id_ed25519
+id_ecdsa
 
+# Python environments and caches
+.venv
+.venv/
+venv
+venv/
+env
+env/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# IDE/OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# LaTeX build intermediates
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.idx
+*.ilg
+*.ind
+*.lof
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
+# Datasets and generated artifacts
+data/raw/
+data/processed/
+data/embeddings/
+data/models/
+data/indexes/
+experiments/
+logs/
+*.log
+*.npy
+*.npz
+*.pkl
+*.model
+*.faiss
+*.index
+*.parquet
+
+# External ML caches / trackers
+wandb/
+mlruns/
+lightning_logs/
+
+# Large external vectors/models
+glove.840B.300d.txt
+glove.840B.300d.zip
+GoogleNews-vectors-negative300.bin
+GoogleNews-vectors-negative300.bin.gz
+word2vec-google-news-300*
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# Local smoke/debug scripts and notes
+scripts/run_local_bge_large_sample.py
+scratch_*
+*_scratch.*
 MAIN.md
 Representation_Learning_Project.md
-StudyGuide.md
-scratch_test_encoders.py
+PROJECT_KNOWLEDGE_AUDIT.md
+CODEBASE_READING_GUIDE.md
+CODE_WALKTHROUGH_VI.md

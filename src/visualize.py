@@ -65,14 +65,24 @@ def plot_metrics_comparison(metrics_dict, filename=None):
         metric_names.update(m.keys())
     metric_names = sorted(list(metric_names))
     
-    # Prepare data for seaborn
+    # Prepare data for seaborn. Full-data notebooks attach metadata such as
+    # label names and sample sizes to the metrics dict; these are not scores.
     data = []
     for encoder, metrics in metrics_dict.items():
         for m_name, m_val in metrics.items():
-            data.append({'Encoder': encoder, 'Metric': m_name.upper(), 'Score': m_val})
+            if m_name in {"label_column", "n_clusters", "query_sample_size", "silhouette_sample_size"}:
+                continue
+            if not isinstance(m_val, (int, float, np.integer, np.floating)):
+                continue
+            if not np.isfinite(float(m_val)):
+                continue
+            data.append({'Encoder': encoder, 'Metric': m_name.upper(), 'Score': float(m_val)})
             
     import pandas as pd
     df = pd.DataFrame(data)
+    if df.empty:
+        print("No numeric score metrics to plot.")
+        return
     
     plt.figure(figsize=(12, 6))
     sns.barplot(data=df, x='Metric', y='Score', hue='Encoder', palette='Set2')

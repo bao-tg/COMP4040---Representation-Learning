@@ -1,0 +1,41 @@
+{
+  "sample_size": 50000,
+  "stratified_by": "category",
+  "random_state": 42,
+  "figures": {
+    "category_grid": "figures/all_encoders_umap_category_grid.png",
+    "cluster_grid": "figures/all_encoders_umap_cluster_grid.png"
+  },
+  "encoders": {
+    "TFIDF": {
+      "sample_size": 50000,
+      "stratified_by": "category",
+      "random_state": 42,
+      "reused_coords": false
+    },
+    "W2V": {
+      "sample_size": 50000,
+      "stratified_by": "category",
+      "random_state": 42,
+      "reused_coords": false
+    },
+    "GLOVE": {
+      "sample_size": 50000,
+      "stratified_by": "category",
+      "random_state": 42,
+      "reused_coords": false
+    },
+    "SBERT": {
+      "sample_size": 50000,
+      "stratified_by": "category",
+      "random_state": 42,
+      "reused_coords": false
+    },
+    "BGE": {
+      "sample_size": 50000,
+      "stratified_by": "category",
+      "random_state": 42,
+      "reused_coords": false
+    }
+  }
+}
