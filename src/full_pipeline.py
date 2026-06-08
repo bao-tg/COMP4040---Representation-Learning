@@ -448,7 +448,22 @@ def _reuse_existing_embedding(output_path: Path, expected_shape: tuple[int, int]
         return None
     arr = np.load(output_path, mmap_mode="r")
     if arr.shape == expected_shape:
-        return {"path": str(output_path), "shape": list(arr.shape), "skipped_existing": True}
+        del arr
+        meta_path = _embedding_meta_path(output_path)
+        if meta_path.exists():
+            meta = read_json(meta_path)
+            if (
+                meta.get("complete", False)
+                and int(meta.get("total_rows", -1)) == expected_shape[0]
+                and int(meta.get("rows_written", -1)) == expected_shape[0]
+                and int(meta.get("dim", -1)) == expected_shape[1]
+            ):
+                return {"path": str(output_path), "shape": list(expected_shape), "skipped_existing": True}
+        print(f"{output_path} exists but has missing or incomplete meta; rebuilding it.")
+        output_path.unlink()
+        if meta_path.exists():
+            meta_path.unlink()
+        return None
     print(f"{output_path} has shape {arr.shape}, expected {expected_shape}; rebuilding it.")
     del arr
     output_path.unlink()
@@ -468,7 +483,23 @@ def _reuse_existing_embedding_with_max_dim(
         return None
     arr = np.load(output_path, mmap_mode="r")
     if arr.shape[0] == expected_rows and 1 <= arr.shape[1] <= max_dim:
-        return {"path": str(output_path), "shape": list(arr.shape), "skipped_existing": True}
+        shape = list(arr.shape)
+        del arr
+        meta_path = _embedding_meta_path(output_path)
+        if meta_path.exists():
+            meta = read_json(meta_path)
+            if (
+                meta.get("complete", False)
+                and int(meta.get("total_rows", -1)) == expected_rows
+                and int(meta.get("rows_written", -1)) == expected_rows
+                and int(meta.get("dim", -1)) == shape[1]
+            ):
+                return {"path": str(output_path), "shape": shape, "skipped_existing": True}
+        print(f"{output_path} exists but has missing or incomplete meta; rebuilding it.")
+        output_path.unlink()
+        if meta_path.exists():
+            meta_path.unlink()
+        return None
     print(f"{output_path} has shape {arr.shape}, expected rows {expected_rows} and dim <= {max_dim}; rebuilding it.")
     del arr
     output_path.unlink()
@@ -491,18 +522,47 @@ def _read_rows_written(meta_path: Path, expected_rows: int, expected_dim: int) -
     return int(meta.get("rows_written", 0))
 
 
-def _write_embedding_meta(output_path: Path, rows_written: int, total_rows: int, dim: int, kind: str) -> None:
-    write_json(
-        _embedding_meta_path(output_path),
-        {
-            "kind": kind,
-            "path": str(output_path),
-            "rows_written": rows_written,
-            "total_rows": total_rows,
-            "dim": dim,
-            "complete": rows_written >= total_rows,
-        },
-    )
+def _write_embedding_meta(
+    output_path: Path,
+    rows_written: int,
+    total_rows: int,
+    dim: int,
+    kind: str,
+    extra: dict | None = None,
+) -> None:
+    payload = {
+        "kind": kind,
+        "path": str(output_path),
+        "rows_written": rows_written,
+        "total_rows": total_rows,
+        "dim": dim,
+        "complete": rows_written >= total_rows,
+    }
+    if extra:
+        payload.update(extra)
+    write_json(_embedding_meta_path(output_path), payload)
+
+
+def _format_elapsed_seconds(seconds: float) -> str:
+    seconds = float(seconds)
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    remainder = seconds - (hours * 3600) - (minutes * 60)
+    remainder_text = f"{remainder:05.2f}".rstrip("0").rstrip(".")
+    if hours:
+        return f"{hours}:{minutes:02d}:{remainder_text}"
+    return f"{minutes}:{remainder_text}"
+
+
+def _run_timed_embedding_writer(build_fn) -> dict:
+    start = time.perf_counter()
+    result = dict(build_fn())
+    elapsed_seconds = round(time.perf_counter() - start, 2)
+    if not result.get("skipped_existing"):
+        result["elapsed"] = _format_elapsed_seconds(elapsed_seconds)
+        result["elapsed_seconds"] = elapsed_seconds
+        result["runtime_source"] = "internal_perf_counter"
+    return result
 
 
 def write_transformer_embeddings(
@@ -696,6 +756,106 @@ def write_pretrained_w2v_embeddings(
     }
 
 
+def collect_token_counts(
+    processed_path: str | Path = PROCESSED_PATH,
+    batch_size: int = 8192,
+) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    for texts in tqdm(iter_text_batches(processed_path, batch_size=batch_size), desc="Count corpus tokens"):
+        for text in texts:
+            counts.update(text.split())
+    return counts
+
+
+def write_trained_w2v_embeddings(
+    processed_path: str | Path = PROCESSED_PATH,
+    output_path: str | Path = EMBEDDING_DIR / "w2v_trained.npy",
+    model_path: str | Path = MODEL_DIR / "w2v_trained.model",
+    vector_size: int = 300,
+    window: int = 5,
+    min_count: int = 5,
+    epochs: int = 5,
+    workers: int | None = None,
+    sg: int = 1,
+    sample: float = 1e-3,
+    random_state: int = 42,
+    text_batch_size: int = 8192,
+    force: bool = False,
+) -> dict:
+    from gensim.models import Word2Vec
+
+    processed_path = Path(processed_path)
+    output_path = Path(output_path)
+    model_path = Path(model_path)
+    total_rows = parquet_row_count(processed_path)
+    reusable = _reuse_existing_embedding(output_path, (total_rows, vector_size), force=force)
+    if reusable is not None:
+        return reusable
+
+    workers = workers or max(1, (os.cpu_count() or 1) - 1)
+    sentences = ParquetTokenIterable(processed_path, batch_size=text_batch_size)
+    model = Word2Vec(
+        vector_size=vector_size,
+        window=window,
+        min_count=min_count,
+        workers=workers,
+        sg=sg,
+        sample=sample,
+        seed=random_state,
+    )
+    print("Building corpus-trained Word2Vec vocabulary...")
+    model.build_vocab(sentences)
+    if not model.wv.key_to_index:
+        raise RuntimeError("Corpus-trained Word2Vec vocabulary is empty. Lower min_count or check cleaned_text.")
+    print(
+        f"Training corpus Word2Vec for {epochs} epochs "
+        f"on {model.corpus_count:,} documents and {model.corpus_total_words:,} tokens..."
+    )
+    model.train(
+        ParquetTokenIterable(processed_path, batch_size=text_batch_size),
+        total_examples=model.corpus_count,
+        epochs=epochs,
+    )
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    model.save(str(model_path))
+
+    output = _open_output_memmap(output_path, (total_rows, vector_size), resume=False)
+    offset = 0
+    for texts in tqdm(iter_text_batches(processed_path, batch_size=text_batch_size), desc="Encode trained W2V"):
+        rows = [_mean_embedding(text.split(), model.wv, vector_size) for text in texts]
+        vectors = np.vstack(rows).astype("float32", copy=False)
+        output[offset : offset + len(vectors)] = vectors
+        offset += len(vectors)
+    output.flush()
+    _write_embedding_meta(
+        output_path,
+        total_rows,
+        total_rows,
+        vector_size,
+        "trained_word2vec:corpus",
+        {
+            "model_path": str(model_path),
+            "vocabulary_size": int(len(model.wv.key_to_index)),
+            "window": int(window),
+            "min_count": int(min_count),
+            "epochs": int(epochs),
+            "workers": int(workers),
+            "sg": int(sg),
+            "sample": float(sample),
+        },
+    )
+    return {
+        "path": str(output_path),
+        "shape": [total_rows, vector_size],
+        "model_path": str(model_path),
+        "vocabulary_size": int(len(model.wv.key_to_index)),
+        "window": int(window),
+        "min_count": int(min_count),
+        "epochs": int(epochs),
+        "workers": int(workers),
+    }
+
+
 def collect_vocabulary(
     processed_path: str | Path = PROCESSED_PATH,
     batch_size: int = 8192,
@@ -845,12 +1005,278 @@ def write_glove_embeddings(
     return {"path": str(output_path), "shape": [total_rows, vector_size], **glove_status}
 
 
+def _token_to_id_from_counts(
+    counts: Counter[str],
+    max_vocab: int,
+    min_count: int,
+) -> dict[str, int]:
+    candidates = [
+        (token, count)
+        for token, count in counts.items()
+        if count >= min_count
+    ]
+    candidates.sort(key=lambda item: (-item[1], item[0]))
+    if max_vocab > 0:
+        candidates = candidates[:max_vocab]
+    if not candidates:
+        raise RuntimeError("GloVe vocabulary is empty. Lower min_count or check cleaned_text.")
+    return {token: idx for idx, (token, _) in enumerate(candidates)}
+
+
+def _build_glove_cooccurrence(
+    processed_path: str | Path,
+    token_to_id: dict[str, int],
+    window: int,
+    batch_size: int,
+    max_tokens_per_doc: int | None = None,
+) -> dict[tuple[int, int], float]:
+    cooccur: dict[tuple[int, int], float] = defaultdict(float)
+    for texts in tqdm(iter_text_batches(processed_path, batch_size=batch_size), desc="Build GloVe co-occurrence"):
+        for text in texts:
+            tokens = text.split()
+            if max_tokens_per_doc is not None and max_tokens_per_doc > 0:
+                tokens = tokens[:max_tokens_per_doc]
+            ids = [token_to_id[token] for token in tokens if token in token_to_id]
+            for center_pos, center_id in enumerate(ids):
+                start = max(0, center_pos - window)
+                end = min(len(ids), center_pos + window + 1)
+                for context_pos in range(start, end):
+                    if context_pos == center_pos:
+                        continue
+                    distance = abs(context_pos - center_pos)
+                    cooccur[(center_id, ids[context_pos])] += 1.0 / distance
+    if not cooccur:
+        raise RuntimeError("GloVe co-occurrence matrix is empty. Lower min_count or check cleaned_text.")
+    return cooccur
+
+
+def _cooccurrence_to_arrays(cooccur: dict[tuple[int, int], float]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    n_pairs = len(cooccur)
+    row_ids = np.empty(n_pairs, dtype=np.int64)
+    col_ids = np.empty(n_pairs, dtype=np.int64)
+    values = np.empty(n_pairs, dtype=np.float32)
+    for idx, ((row_id, col_id), value) in enumerate(tqdm(cooccur.items(), total=n_pairs, desc="Pack GloVe pairs")):
+        row_ids[idx] = row_id
+        col_ids[idx] = col_id
+        values[idx] = value
+    return row_ids, col_ids, values
+
+
+def _train_glove_matrix(
+    row_ids: np.ndarray,
+    col_ids: np.ndarray,
+    values: np.ndarray,
+    vocab_size: int,
+    vector_size: int,
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    x_max: float,
+    alpha: float,
+    random_state: int,
+) -> tuple[np.ndarray, dict]:
+    import torch
+
+    class GloveModel(torch.nn.Module):
+        def __init__(self, n_tokens: int, dim: int) -> None:
+            super().__init__()
+            self.word = torch.nn.Embedding(n_tokens, dim)
+            self.context = torch.nn.Embedding(n_tokens, dim)
+            self.word_bias = torch.nn.Embedding(n_tokens, 1)
+            self.context_bias = torch.nn.Embedding(n_tokens, 1)
+            bound = 0.5 / max(1, dim)
+            torch.nn.init.uniform_(self.word.weight, -bound, bound)
+            torch.nn.init.uniform_(self.context.weight, -bound, bound)
+            torch.nn.init.zeros_(self.word_bias.weight)
+            torch.nn.init.zeros_(self.context_bias.weight)
+
+        def forward(self, word_ids, context_ids):
+            dot = (self.word(word_ids) * self.context(context_ids)).sum(dim=1)
+            bias = self.word_bias(word_ids).squeeze(1) + self.context_bias(context_ids).squeeze(1)
+            return dot + bias
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    torch.manual_seed(random_state)
+    model = GloveModel(vocab_size, vector_size).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    log_values = np.log(values).astype("float32", copy=False)
+    weights = np.minimum((values / x_max) ** alpha, 1.0).astype("float32", copy=False)
+    order = np.arange(len(values), dtype=np.int64)
+    rng = np.random.default_rng(random_state)
+    losses: list[float] = []
+
+    for epoch in range(epochs):
+        rng.shuffle(order)
+        total_loss = 0.0
+        total_weight = 0
+        progress = tqdm(
+            range(0, len(order), batch_size),
+            desc=f"Train GloVe epoch {epoch + 1}/{epochs}",
+        )
+        for start in progress:
+            batch_idx = order[start : start + batch_size]
+            word_batch = torch.from_numpy(row_ids[batch_idx]).to(device)
+            context_batch = torch.from_numpy(col_ids[batch_idx]).to(device)
+            target_batch = torch.from_numpy(log_values[batch_idx]).to(device)
+            weight_batch = torch.from_numpy(weights[batch_idx]).to(device)
+
+            optimizer.zero_grad(set_to_none=True)
+            prediction = model(word_batch, context_batch)
+            loss = torch.mean(weight_batch * (prediction - target_batch) ** 2)
+            loss.backward()
+            optimizer.step()
+
+            batch_size_actual = len(batch_idx)
+            total_loss += float(loss.detach().cpu()) * batch_size_actual
+            total_weight += batch_size_actual
+        losses.append(total_loss / max(1, total_weight))
+        print(f"GloVe epoch {epoch + 1}/{epochs} loss={losses[-1]:.6f}", flush=True)
+
+    embedding_matrix = (
+        model.word.weight.detach().cpu().numpy()
+        + model.context.weight.detach().cpu().numpy()
+    ).astype("float32", copy=False)
+    return embedding_matrix, {"device": device, "losses": losses}
+
+
+def _mean_embedding_from_matrix(
+    tokens: list[str],
+    embedding_matrix: np.ndarray,
+    token_to_id: dict[str, int],
+    vector_size: int,
+) -> np.ndarray:
+    ids = [token_to_id[token] for token in tokens if token in token_to_id]
+    if not ids:
+        return np.zeros(vector_size, dtype="float32")
+    return embedding_matrix[ids].mean(axis=0).astype("float32", copy=False)
+
+
+def write_trained_glove_embeddings(
+    processed_path: str | Path = PROCESSED_PATH,
+    output_path: str | Path = EMBEDDING_DIR / "glove_trained.npy",
+    model_path: str | Path = MODEL_DIR / "glove_trained.pt",
+    vector_size: int = 300,
+    window: int = 5,
+    min_count: int = 5,
+    max_vocab: int = 50_000,
+    epochs: int = 25,
+    glove_batch_size: int = 65_536,
+    learning_rate: float = 0.05,
+    x_max: float = 100.0,
+    alpha: float = 0.75,
+    random_state: int = 42,
+    text_batch_size: int = 8192,
+    max_tokens_per_doc: int | None = None,
+    force: bool = False,
+) -> dict:
+    import torch
+
+    processed_path = Path(processed_path)
+    output_path = Path(output_path)
+    model_path = Path(model_path)
+    total_rows = parquet_row_count(processed_path)
+    reusable = _reuse_existing_embedding(output_path, (total_rows, vector_size), force=force)
+    if reusable is not None:
+        return reusable
+
+    counts = collect_token_counts(processed_path, batch_size=text_batch_size)
+    token_to_id = _token_to_id_from_counts(counts, max_vocab=max_vocab, min_count=min_count)
+    print(f"Training corpus GloVe with vocabulary size {len(token_to_id):,}...")
+    cooccur = _build_glove_cooccurrence(
+        processed_path=processed_path,
+        token_to_id=token_to_id,
+        window=window,
+        batch_size=text_batch_size,
+        max_tokens_per_doc=max_tokens_per_doc,
+    )
+    row_ids, col_ids, values = _cooccurrence_to_arrays(cooccur)
+    del cooccur
+    gc.collect()
+
+    embedding_matrix, train_summary = _train_glove_matrix(
+        row_ids=row_ids,
+        col_ids=col_ids,
+        values=values,
+        vocab_size=len(token_to_id),
+        vector_size=vector_size,
+        epochs=epochs,
+        batch_size=glove_batch_size,
+        learning_rate=learning_rate,
+        x_max=x_max,
+        alpha=alpha,
+        random_state=random_state,
+    )
+
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "embedding_matrix": embedding_matrix,
+            "token_to_id": token_to_id,
+            "vector_size": vector_size,
+            "window": window,
+            "min_count": min_count,
+            "max_vocab": max_vocab,
+            "epochs": epochs,
+            "x_max": x_max,
+            "alpha": alpha,
+            "losses": train_summary["losses"],
+        },
+        model_path,
+    )
+
+    output = _open_output_memmap(output_path, (total_rows, vector_size), resume=False)
+    offset = 0
+    for texts in tqdm(iter_text_batches(processed_path, batch_size=text_batch_size), desc="Encode trained GloVe"):
+        rows = [
+            _mean_embedding_from_matrix(text.split(), embedding_matrix, token_to_id, vector_size)
+            for text in texts
+        ]
+        vectors = np.vstack(rows).astype("float32", copy=False)
+        output[offset : offset + len(vectors)] = vectors
+        offset += len(vectors)
+    output.flush()
+    _write_embedding_meta(
+        output_path,
+        total_rows,
+        total_rows,
+        vector_size,
+        "trained_glove:corpus",
+        {
+            "model_path": str(model_path),
+            "vocabulary_size": int(len(token_to_id)),
+            "cooccurrence_pairs": int(len(values)),
+            "window": int(window),
+            "min_count": int(min_count),
+            "max_vocab": int(max_vocab),
+            "epochs": int(epochs),
+            "glove_batch_size": int(glove_batch_size),
+            "learning_rate": float(learning_rate),
+            "x_max": float(x_max),
+            "alpha": float(alpha),
+            "max_tokens_per_doc": max_tokens_per_doc,
+            "device": train_summary["device"],
+            "losses": train_summary["losses"],
+        },
+    )
+    return {
+        "path": str(output_path),
+        "shape": [total_rows, vector_size],
+        "model_path": str(model_path),
+        "vocabulary_size": int(len(token_to_id)),
+        "cooccurrence_pairs": int(len(values)),
+        "device": train_summary["device"],
+        "epochs": int(epochs),
+    }
+
+
 def write_all_embeddings(
     processed_path: str | Path = PROCESSED_PATH,
     embedding_dir: str | Path = EMBEDDING_DIR,
     run_tfidf: bool = True,
     run_w2v: bool = True,
     run_glove: bool = True,
+    run_w2v_trained: bool = False,
+    run_glove_trained: bool = False,
     run_sbert: bool = True,
     run_bge: bool = True,
     bge_model_name: str = "BAAI/bge-large-en-v1.5",
@@ -864,60 +1290,126 @@ def write_all_embeddings(
     force: bool = False,
     transformer_batch_size: int = 256,
     text_batch_size: int = 8192,
+    trained_vector_size: int = 300,
+    trained_window: int = 5,
+    trained_min_count: int = 5,
+    trained_workers: int | None = None,
+    trained_w2v_epochs: int = 5,
+    trained_glove_epochs: int = 25,
+    trained_glove_max_vocab: int = 50_000,
+    trained_glove_batch_size: int = 65_536,
+    trained_glove_learning_rate: float = 0.05,
+    trained_glove_x_max: float = 100.0,
+    trained_glove_alpha: float = 0.75,
+    trained_glove_max_tokens_per_doc: int | None = None,
 ) -> dict:
     embedding_dir = Path(embedding_dir)
     embedding_dir.mkdir(parents=True, exist_ok=True)
+    model_output_dir = MODEL_DIR if embedding_dir == EMBEDDING_DIR else embedding_dir / "models"
     results = {}
     if run_tfidf:
-        results["tfidf"] = write_tfidf_svd_embeddings(
-            processed_path=processed_path,
-            output_path=embedding_dir / "tfidf.npy",
-            text_batch_size=text_batch_size,
-            force=force,
+        results["tfidf"] = _run_timed_embedding_writer(
+            lambda: write_tfidf_svd_embeddings(
+                processed_path=processed_path,
+                output_path=embedding_dir / "tfidf.npy",
+                text_batch_size=text_batch_size,
+                force=force,
+            )
         )
     if run_w2v:
-        results["w2v"] = write_pretrained_w2v_embeddings(
-            processed_path=processed_path,
-            output_path=embedding_dir / "w2v.npy",
-            pretrained_path=pretrained_w2v_path,
-            pretrained_name=pretrained_w2v_name,
-            allow_download=allow_pretrained_w2v_download,
-            text_batch_size=text_batch_size,
-            force=force,
+        results["w2v"] = _run_timed_embedding_writer(
+            lambda: write_pretrained_w2v_embeddings(
+                processed_path=processed_path,
+                output_path=embedding_dir / "w2v.npy",
+                pretrained_path=pretrained_w2v_path,
+                pretrained_name=pretrained_w2v_name,
+                allow_download=allow_pretrained_w2v_download,
+                text_batch_size=text_batch_size,
+                force=force,
+            )
         )
     if run_glove:
-        results["glove"] = write_glove_embeddings(
-            processed_path=processed_path,
-            glove_path=glove_path,
-            output_path=embedding_dir / "glove.npy",
-            text_batch_size=text_batch_size,
-            force=force,
-            allow_download=allow_glove_download,
-            glove_url=glove_url,
-            glove_zip_path=glove_zip_path,
+        results["glove"] = _run_timed_embedding_writer(
+            lambda: write_glove_embeddings(
+                processed_path=processed_path,
+                glove_path=glove_path,
+                output_path=embedding_dir / "glove.npy",
+                text_batch_size=text_batch_size,
+                force=force,
+                allow_download=allow_glove_download,
+                glove_url=glove_url,
+                glove_zip_path=glove_zip_path,
+            )
+        )
+    if run_w2v_trained:
+        results["w2v_trained"] = _run_timed_embedding_writer(
+            lambda: write_trained_w2v_embeddings(
+                processed_path=processed_path,
+                output_path=embedding_dir / "w2v_trained.npy",
+                model_path=model_output_dir / "w2v_trained.model",
+                vector_size=trained_vector_size,
+                window=trained_window,
+                min_count=trained_min_count,
+                epochs=trained_w2v_epochs,
+                workers=trained_workers,
+                text_batch_size=text_batch_size,
+                force=force,
+            )
+        )
+    if run_glove_trained:
+        results["glove_trained"] = _run_timed_embedding_writer(
+            lambda: write_trained_glove_embeddings(
+                processed_path=processed_path,
+                output_path=embedding_dir / "glove_trained.npy",
+                model_path=model_output_dir / "glove_trained.pt",
+                vector_size=trained_vector_size,
+                window=trained_window,
+                min_count=trained_min_count,
+                max_vocab=trained_glove_max_vocab,
+                epochs=trained_glove_epochs,
+                glove_batch_size=trained_glove_batch_size,
+                learning_rate=trained_glove_learning_rate,
+                x_max=trained_glove_x_max,
+                alpha=trained_glove_alpha,
+                text_batch_size=text_batch_size,
+                max_tokens_per_doc=trained_glove_max_tokens_per_doc,
+                force=force,
+            )
         )
     if run_sbert:
-        results["sbert"] = write_transformer_embeddings(
-            processed_path=processed_path,
-            output_path=embedding_dir / "sbert.npy",
-            model_name="all-MiniLM-L6-v2",
-            batch_size=transformer_batch_size,
-            text_batch_size=transformer_batch_size,
-            resume=not force,
+        results["sbert"] = _run_timed_embedding_writer(
+            lambda: write_transformer_embeddings(
+                processed_path=processed_path,
+                output_path=embedding_dir / "sbert.npy",
+                model_name="all-MiniLM-L6-v2",
+                batch_size=transformer_batch_size,
+                text_batch_size=transformer_batch_size,
+                resume=not force,
+            )
         )
     if run_bge:
-        results["bge"] = write_transformer_embeddings(
-            processed_path=processed_path,
-            output_path=embedding_dir / "bge.npy",
-            model_name=bge_model_name,
-            batch_size=transformer_batch_size,
-            text_batch_size=transformer_batch_size,
-            resume=not force,
+        results["bge"] = _run_timed_embedding_writer(
+            lambda: write_transformer_embeddings(
+                processed_path=processed_path,
+                output_path=embedding_dir / "bge.npy",
+                model_name=bge_model_name,
+                batch_size=transformer_batch_size,
+                text_batch_size=transformer_batch_size,
+                resume=not force,
+            )
         )
     summary_path = embedding_dir / "embedding_run_summary.json"
     existing_summary = read_json(summary_path) if summary_path.exists() else {}
-    existing_summary.update(results)
-    write_json(summary_path, existing_summary)
+    merged_summary = dict(existing_summary)
+    for encoder, result in results.items():
+        if result.get("skipped_existing") and isinstance(existing_summary.get(encoder), dict):
+            merged = dict(existing_summary[encoder])
+            merged.update(result)
+            merged_summary[encoder] = merged
+            results[encoder] = merged
+        else:
+            merged_summary[encoder] = result
+    write_json(summary_path, merged_summary)
     return results
 
 
@@ -1200,6 +1692,8 @@ def run_full_anomaly_for_embedding(
     figures_dir = Path(figures_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
+    arrays_dir = results_dir / "arrays"
+    arrays_dir.mkdir(parents=True, exist_ok=True)
 
     X = load_embedding(embedding_path)
     meta = pd.read_parquet(
@@ -1258,6 +1752,12 @@ def run_full_anomaly_for_embedding(
 
     iso_csv = results_dir / f"{embedding_path.stem}_iso_anomalies.csv"
     inc_csv = results_dir / f"{embedding_path.stem}_inconsistencies.csv"
+    iso_scores_path = arrays_dir / f"{embedding_path.stem}_iso_scores.npy"
+    residuals_path = arrays_dir / f"{embedding_path.stem}_rating_residuals.npy"
+    predicted_path = arrays_dir / f"{embedding_path.stem}_predicted_ratings.npy"
+    np.save(iso_scores_path, iso_scores)
+    np.save(residuals_path, residuals.astype("float32", copy=False))
+    np.save(predicted_path, predicted)
     meta.loc[is_iso_anomaly].sort_values("iso_score").to_csv(iso_csv, index=False)
     meta.loc[is_inconsistent].sort_values("rating_residual", ascending=False).to_csv(inc_csv, index=False)
 
@@ -1290,6 +1790,9 @@ def run_full_anomaly_for_embedding(
         "iso_score_threshold": iso_threshold,
         "inconsistency_count": int(is_inconsistent.sum()),
         "rating_residual_threshold": residual_threshold,
+        "iso_scores_path": str(iso_scores_path),
+        "rating_residuals_path": str(residuals_path),
+        "predicted_ratings_path": str(predicted_path),
         "iso_csv": str(iso_csv),
         "inconsistency_csv": str(inc_csv),
         "iso_plot": str(iso_plot),
@@ -1459,11 +1962,81 @@ HIGH_CONTRAST_COLORS = [
 ]
 
 
+UMAP_ENCODER_LABELS = {
+    "tfidf": "TF-IDF",
+    "w2v": "Word2Vec",
+    "glove": "GloVe",
+    "w2v_trained": "Word2Vec (trained)",
+    "glove_trained": "GloVe (trained)",
+    "sbert": "SBERT",
+    "bge": "BGE-large",
+}
+
+UMAP_CATEGORY_LABELS = {
+    "Books": "Books",
+    "Electronics": "Electronics",
+    "Kindle_Store": "Kindle Store",
+    "Movies_and_TV": "Movies & TV",
+    "Sports_and_Outdoors": "Sports & Outdoors",
+}
+
+
 def _high_contrast_palette(n_colors: int) -> list[str]:
     if n_colors <= len(HIGH_CONTRAST_COLORS):
         return HIGH_CONTRAST_COLORS[:n_colors]
     repeats = int(np.ceil(n_colors / len(HIGH_CONTRAST_COLORS)))
     return (HIGH_CONTRAST_COLORS * repeats)[:n_colors]
+
+
+def _configure_umap_grid_style() -> None:
+    import matplotlib as mpl
+    from matplotlib import font_manager
+
+    for font_path in [
+        "/mnt/c/Windows/Fonts/times.ttf",
+        "/mnt/c/Windows/Fonts/timesbd.ttf",
+        "/mnt/c/Windows/Fonts/timesi.ttf",
+        "/mnt/c/Windows/Fonts/timesbi.ttf",
+    ]:
+        path = Path(font_path)
+        if path.exists():
+            font_manager.fontManager.addfont(str(path))
+
+    mpl.rcParams.update(
+        {
+            "font.family": "serif",
+            "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+            "mathtext.fontset": "stix",
+            "axes.titlesize": 22,
+            "axes.titleweight": "normal",
+            "legend.fontsize": 18,
+            "figure.titlesize": 22,
+            "savefig.dpi": 300,
+        }
+    )
+
+
+def _display_encoder_name(encoder: str) -> str:
+    return UMAP_ENCODER_LABELS.get(encoder, encoder.upper())
+
+
+def _display_umap_label(label: object, *, cluster: bool = False) -> str:
+    if cluster:
+        return f"Cluster {label}"
+    return UMAP_CATEGORY_LABELS.get(str(label), str(label))
+
+
+def _format_umap_panel(ax, coords: np.ndarray) -> None:
+    pad_x = (coords[:, 0].max() - coords[:, 0].min()) * 0.06
+    pad_y = (coords[:, 1].max() - coords[:, 1].min()) * 0.06
+    ax.set_xlim(coords[:, 0].min() - pad_x, coords[:, 0].max() + pad_x)
+    ax.set_ylim(coords[:, 1].min() - pad_y, coords[:, 1].max() + pad_y)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.tick_params(length=0)
+    for spine in ax.spines.values():
+        spine.set_color("#3f3f3f")
+        spine.set_linewidth(0.85)
 
 
 def _plot_umap_points(
@@ -1512,7 +2085,7 @@ def _plot_umap_grid(
     labels: np.ndarray,
     output_path: str | Path,
     title: str,
-    point_size: float = 1.0,
+    point_size: float = 1.05,
 ) -> None:
     import matplotlib.pyplot as plt
     from matplotlib.colors import ListedColormap
@@ -1521,6 +2094,7 @@ def _plot_umap_grid(
     if not coords_by_encoder:
         return
 
+    _configure_umap_grid_style()
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     codes, uniques = _label_codes(labels)
@@ -1529,7 +2103,9 @@ def _plot_umap_grid(
     encoders = list(coords_by_encoder)
     ncols = min(3, len(encoders))
     nrows = int(np.ceil(len(encoders) / ncols))
-    fig, axes = plt.subplots(nrows, ncols, figsize=(5.2 * ncols, 4.6 * nrows), squeeze=False)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(3.07 * ncols, 3.0 * nrows), squeeze=False)
+    for ax in axes.ravel():
+        ax.set_box_aspect(0.76)
 
     for ax, encoder in zip(axes.ravel(), encoders):
         coords = coords_by_encoder[encoder]
@@ -1541,25 +2117,48 @@ def _plot_umap_grid(
             vmin=-0.5,
             vmax=len(uniques) - 0.5,
             s=point_size,
-            alpha=0.65,
+            alpha=0.74,
             linewidths=0,
             rasterized=True,
         )
-        ax.set_title(encoder.upper())
-        ax.set_xticks([])
-        ax.set_yticks([])
+        ax.set_title(_display_encoder_name(encoder), pad=4, fontweight="normal")
+        _format_umap_panel(ax, coords)
 
     for ax in axes.ravel()[len(encoders) :]:
         ax.axis("off")
 
     handles = [
-        Line2D([0], [0], marker="o", color="w", label=str(label), markerfacecolor=colors[i], markersize=7)
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            label=_display_umap_label(label),
+            markerfacecolor=colors[i],
+            markersize=7.5,
+        )
         for i, label in enumerate(uniques)
     ]
-    fig.suptitle(title, fontsize=14)
-    fig.legend(handles=handles, fontsize=8, loc="center right")
-    fig.tight_layout(rect=(0, 0, 0.88, 0.95))
-    fig.savefig(output_path, dpi=180)
+    fig.suptitle(title, fontsize=22, fontweight="bold", y=0.985)
+    empty_axes = axes.ravel()[len(encoders) :]
+    if len(empty_axes):
+        legend = empty_axes[0].legend(
+            handles=handles,
+            loc="center",
+            frameon=True,
+            fancybox=False,
+            framealpha=1.0,
+            borderpad=0.62,
+            labelspacing=0.45,
+            handletextpad=0.55,
+            borderaxespad=0.0,
+        )
+        legend.get_frame().set_edgecolor("#cfcfcf")
+        legend.get_frame().set_linewidth(0.75)
+    else:
+        fig.legend(handles=handles, loc="center right")
+    fig.subplots_adjust(left=0.035, right=0.985, bottom=0.065, top=0.86, wspace=0.065, hspace=0.255)
+    fig.savefig(output_path, dpi=300)
     plt.close(fig)
 
 
@@ -1663,10 +2262,13 @@ def run_full_umap_comparison(
         from matplotlib.colors import ListedColormap
         from matplotlib.lines import Line2D
 
+        _configure_umap_grid_style()
         encoders_with_clusters = list(cluster_coords_by_encoder)
         ncols = min(3, len(encoders_with_clusters))
         nrows = int(np.ceil(len(encoders_with_clusters) / ncols))
-        fig, axes = plt.subplots(nrows, ncols, figsize=(5.2 * ncols, 4.6 * nrows), squeeze=False)
+        fig, axes = plt.subplots(nrows, ncols, figsize=(3.07 * ncols, 3.0 * nrows), squeeze=False)
+        for ax in axes.ravel():
+            ax.set_box_aspect(0.76)
         for ax, encoder in zip(axes.ravel(), encoders_with_clusters):
             cluster_labels = cluster_labels_by_encoder[encoder]
             codes, uniques = _label_codes(cluster_labels)
@@ -1680,33 +2282,55 @@ def run_full_umap_comparison(
                 cmap=cmap,
                 vmin=-0.5,
                 vmax=len(uniques) - 0.5,
-                s=1.0,
-                alpha=0.65,
+                s=1.05,
+                alpha=0.74,
                 linewidths=0,
                 rasterized=True,
             )
-            ax.set_title(encoder.upper())
-            ax.set_xticks([])
-            ax.set_yticks([])
+            ax.set_title(_display_encoder_name(encoder), pad=4, fontweight="normal")
+            _format_umap_panel(ax, coords)
         for ax in axes.ravel()[len(encoders_with_clusters) :]:
             ax.axis("off")
+        cluster_values = sorted(np.unique(np.concatenate(list(cluster_labels_by_encoder.values()))))
+        colors = _high_contrast_palette(max(1, len(cluster_values)))
         handles = [
             Line2D(
                 [0],
                 [0],
                 marker="o",
                 color="w",
-                label=f"cluster {i}",
-                markerfacecolor=_high_contrast_palette(10)[i],
-                markersize=7,
+                label=_display_umap_label(label, cluster=True),
+                markerfacecolor=colors[i],
+                markersize=7.5,
             )
-            for i in range(min(10, len(np.unique(next(iter(cluster_labels_by_encoder.values()))))))
+            for i, label in enumerate(cluster_values)
         ]
-        fig.suptitle("UMAP Comparison by MiniBatchKMeans Cluster", fontsize=14)
-        fig.legend(handles=handles, fontsize=8, loc="center right")
-        fig.tight_layout(rect=(0, 0, 0.88, 0.95))
-        fig.savefig(cluster_grid, dpi=180)
+        fig.suptitle("UMAP Comparison by MiniBatchKMeans Cluster", fontsize=22, fontweight="bold", y=0.985)
+        empty_axes = axes.ravel()[len(encoders_with_clusters) :]
+        if len(empty_axes):
+            legend = empty_axes[0].legend(
+                handles=handles,
+                loc="center",
+                frameon=True,
+                fancybox=False,
+                framealpha=1.0,
+                borderpad=0.62,
+                labelspacing=0.45,
+                handletextpad=0.55,
+                borderaxespad=0.0,
+            )
+            legend.get_frame().set_edgecolor("#cfcfcf")
+            legend.get_frame().set_linewidth(0.75)
+        else:
+            fig.legend(handles=handles, loc="center right")
+        fig.subplots_adjust(left=0.035, right=0.985, bottom=0.065, top=0.86, wspace=0.065, hspace=0.255)
+        fig.savefig(cluster_grid, dpi=300)
         plt.close(fig)
+
+    all_summary_path = results_dir / "all_umap_summary.json"
+    existing_summary = read_json(all_summary_path) if all_summary_path.exists() else {}
+    merged_encoder_summary = dict(existing_summary.get("encoders", {}))
+    merged_encoder_summary.update(summary)
 
     all_summary = {
         "sample_indices_path": str(results_dir / "umap_sample_indices.npy"),
@@ -1716,9 +2340,9 @@ def run_full_umap_comparison(
         "random_state": random_state,
         "category_grid": str(category_grid),
         "cluster_grid": str(cluster_grid) if cluster_grid.exists() else None,
-        "encoders": summary,
+        "encoders": merged_encoder_summary,
     }
-    write_json(results_dir / "all_umap_summary.json", all_summary)
+    write_json(all_summary_path, all_summary)
     return all_summary
 
 
@@ -1882,6 +2506,8 @@ def _parse_encoder_runtime_from_logs(logs_dir: str | Path, encoder: str) -> dict
         "tfidf": ["Transform TF-IDF"],
         "w2v": ["Encode pretrained W2V", "Encode W2V", "Encode w2v"],
         "glove": ["Encode GloVe", "Encode glove"],
+        "w2v_trained": ["Encode trained W2V", "Training corpus Word2Vec", "Train corpus W2V"],
+        "glove_trained": ["Encode trained GloVe", "Training corpus GloVe", "Train GloVe epoch"],
         "sbert": ["Encode sbert"],
         "bge": ["Encode bge"],
     }
@@ -1891,11 +2517,17 @@ def _parse_encoder_runtime_from_logs(logs_dir: str | Path, encoder: str) -> dict
         text = log_path.read_text(encoding="utf-8", errors="ignore").replace("\r", "\n")
         if not _log_matches_encoder(log_path, text, encoder, labels):
             continue
+        log_name_matches_encoder = encoder.lower() in log_path.name.lower()
+        command_matches_encoder = f"--encoders {encoder.lower()}" in text.lower()
+        time_v_runtime: dict | None = None
+        tqdm_runtime: dict | None = None
         for line in text.splitlines():
             elapsed_text = _parse_time_v_elapsed_line(line)
             if not elapsed_text:
                 continue
-            best = {
+            if not (log_name_matches_encoder or command_matches_encoder):
+                continue
+            time_v_runtime = {
                 "elapsed": elapsed_text,
                 "elapsed_seconds": _duration_to_seconds(elapsed_text),
                 "throughput_per_second": None,
@@ -1910,13 +2542,17 @@ def _parse_encoder_runtime_from_logs(logs_dir: str | Path, encoder: str) -> dict
                 continue
             elapsed_text = match.group(1)
             elapsed_seconds = _duration_to_seconds(elapsed_text)
-            best = {
+            tqdm_runtime = {
                 "elapsed": elapsed_text,
                 "elapsed_seconds": elapsed_seconds,
                 "throughput_per_second": float(match.group(2)),
                 "log_path": str(log_path),
                 "source": "tqdm",
             }
+        if time_v_runtime is not None:
+            best = time_v_runtime
+        elif tqdm_runtime is not None:
+            best = tqdm_runtime
     return best
 
 
@@ -1946,10 +2582,25 @@ def run_full_efficiency_summary(
         shape = list(arr.shape)
         del arr
         file_size = emb_path.stat().st_size
-        runtime = _parse_encoder_runtime_from_logs(logs_dir, encoder)
+        log_runtime = _parse_encoder_runtime_from_logs(logs_dir, encoder)
         run_summary = embedding_run_summary.get(encoder, {})
+        internal_runtime = None
+        if run_summary.get("elapsed") is not None:
+            internal_runtime = {
+                "elapsed": run_summary.get("elapsed"),
+                "elapsed_seconds": run_summary.get("elapsed_seconds"),
+                "throughput_per_second": None,
+                "log_path": None,
+                "source": run_summary.get("runtime_source", "embedding_run_summary"),
+            }
+        if log_runtime and log_runtime.get("source") == "/usr/bin/time -v":
+            runtime = log_runtime
+        elif internal_runtime:
+            runtime = internal_runtime
+        else:
+            runtime = log_runtime
         device = run_summary.get("device")
-        if device is None and encoder in {"tfidf", "w2v", "glove"}:
+        if device is None and encoder in {"tfidf", "w2v", "glove", "w2v_trained", "glove_trained"}:
             device = "cpu"
         encoder_metrics[encoder.upper()] = {
             "embedding_path": str(emb_path),

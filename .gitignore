@@ -30,6 +30,23 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# LaTeX build intermediates
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.idx
+*.ilg
+*.ind
+*.lof
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
 # Datasets and generated artifacts
 data/raw/
 data/processed/

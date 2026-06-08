@@ -141,12 +141,46 @@ python scripts/run_server_full.py \
   --force-embeddings
 ```
 
+Train corpus-specific Word2Vec and GloVe on the cleaned Amazon review corpus:
+
+```bash
+python scripts/run_server_full.py \
+  --stage embeddings \
+  --encoders w2v_trained,glove_trained \
+  --trained-vector-size 300 \
+  --trained-window 5 \
+  --trained-min-count 5 \
+  --trained-w2v-epochs 5 \
+  --trained-glove-epochs 25 \
+  --trained-glove-max-vocab 50000
+```
+
+This writes `data/embeddings/w2v_trained.npy` and
+`data/embeddings/glove_trained.npy`. It does not replace the pretrained
+`w2v.npy` or `glove.npy` files.
+
+Every embedding stage updates `data/embeddings/embedding_run_summary.json` with
+per-encoder internal timing. For report tables, still prefer the separate
+`/usr/bin/time -v` commands in Section 5 because they produce auditable logs for
+each encoder.
+
 Run all analysis tasks:
 
 ```bash
 python scripts/run_server_full.py \
   --stage analysis \
   --encoders tfidf,w2v,glove,sbert,bge \
+  --analysis-tasks all \
+  --umap-sample-size 50000 \
+  --retrieval-queries 5000
+```
+
+Run the same analysis including corpus-trained static encoders:
+
+```bash
+python scripts/run_server_full.py \
+  --stage analysis \
+  --encoders tfidf,w2v,glove,w2v_trained,glove_trained,sbert,bge \
   --analysis-tasks all \
   --umap-sample-size 50000 \
   --retrieval-queries 5000
@@ -162,7 +196,8 @@ embeddings before running.
 
 If report tables need measured embedding runtimes, wrap selected embedding
 commands with `/usr/bin/time -v` and keep the logs. The efficiency summary can
-parse both tqdm completion lines and `/usr/bin/time -v` elapsed lines.
+parse `/usr/bin/time -v` elapsed lines and falls back to the per-encoder runtime
+stored in `data/embeddings/embedding_run_summary.json`.
 
 TF-IDF, Word2Vec, and GloVe are CPU-bound even when they run on a GPU server.
 SBERT and BGE use CUDA through SentenceTransformer when CUDA is available.
@@ -197,6 +232,21 @@ PYTHONUNBUFFERED=1 /usr/bin/time -v .venv/bin/python scripts/run_server_full.py 
   --force-embeddings \
   --transformer-batch-size 32 \
   2>&1 | tee logs/sbert_runtime_$(date +%Y%m%d_%H%M%S).log
+
+PYTHONUNBUFFERED=1 /usr/bin/time -v .venv/bin/python scripts/run_server_full.py \
+  --stage embeddings \
+  --encoders w2v_trained \
+  --trained-w2v-epochs 5 \
+  --force-embeddings \
+  2>&1 | tee logs/w2v_trained_runtime_$(date +%Y%m%d_%H%M%S).log
+
+PYTHONUNBUFFERED=1 /usr/bin/time -v .venv/bin/python scripts/run_server_full.py \
+  --stage embeddings \
+  --encoders glove_trained \
+  --trained-glove-epochs 25 \
+  --trained-glove-max-vocab 50000 \
+  --force-embeddings \
+  2>&1 | tee logs/glove_trained_runtime_$(date +%Y%m%d_%H%M%S).log
 ```
 
 Refresh the efficiency and final summary after runtime reruns:
@@ -204,7 +254,7 @@ Refresh the efficiency and final summary after runtime reruns:
 ```bash
 python scripts/run_server_full.py \
   --stage analysis \
-  --encoders tfidf,w2v,glove,sbert,bge \
+  --encoders tfidf,w2v,glove,w2v_trained,glove_trained,sbert,bge \
   --analysis-tasks efficiency,summary
 ```
 

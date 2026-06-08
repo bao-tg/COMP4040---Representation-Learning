@@ -181,12 +181,49 @@ python scripts/run_server_full.py \
 archive. This is intentionally opt-in because the zip is about 2 GB and the
 extracted text file is much larger.
 
+Optional corpus-trained static-vector comparison:
+
+```bash
+python scripts/run_server_full.py \
+  --stage embeddings \
+  --encoders w2v_trained,glove_trained \
+  --trained-vector-size 300 \
+  --trained-window 5 \
+  --trained-min-count 5 \
+  --trained-w2v-epochs 5 \
+  --trained-glove-epochs 25 \
+  --trained-glove-max-vocab 50000
+```
+
+These encoders do not overwrite the pretrained `w2v.npy` or `glove.npy`
+artifacts. They write `w2v_trained.npy` and `glove_trained.npy`, allowing the
+analysis stage to compare pretrained static vectors against vectors learned only
+from the Amazon review corpus.
+
+Embedding runs also update `data/embeddings/embedding_run_summary.json` with a
+per-encoder internal runtime, so trained W2V and trained GloVe runtimes remain
+separate even if both are launched in one command. For report-grade runtime logs,
+run each encoder separately with `/usr/bin/time -v` as shown in
+`SERVER_RUNBOOK.md`.
+
 Run the full analysis suite without rebuilding embeddings:
 
 ```bash
 python scripts/run_server_full.py \
   --stage analysis \
   --encoders tfidf,w2v,glove,sbert,bge \
+  --analysis-tasks all \
+  --umap-sample-size 50000 \
+  --retrieval-queries 5000
+```
+
+To include the corpus-trained static-vector experiment in the same analysis,
+append the two trained encoders:
+
+```bash
+python scripts/run_server_full.py \
+  --stage analysis \
+  --encoders tfidf,w2v,glove,w2v_trained,glove_trained,sbert,bge \
   --analysis-tasks all \
   --umap-sample-size 50000 \
   --retrieval-queries 5000

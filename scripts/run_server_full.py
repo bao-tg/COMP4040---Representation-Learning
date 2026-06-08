@@ -32,7 +32,7 @@ from src.full_pipeline import (  # noqa: E402
 )
 
 
-VALID_ENCODERS = ("tfidf", "w2v", "glove", "sbert", "bge")
+VALID_ENCODERS = ("tfidf", "w2v", "glove", "w2v_trained", "glove_trained", "sbert", "bge")
 VALID_STAGES = ("preprocess", "embeddings", "analysis", "all")
 VALID_ANALYSIS_TASKS = (
     "clustering",
@@ -116,6 +116,23 @@ def main() -> None:
     parser.add_argument("--chunksize", type=int, default=100_000)
     parser.add_argument("--transformer-batch-size", type=int, default=32)
     parser.add_argument("--text-batch-size", type=int, default=8192)
+    parser.add_argument("--trained-vector-size", type=int, default=300)
+    parser.add_argument("--trained-window", type=int, default=5)
+    parser.add_argument("--trained-min-count", type=int, default=5)
+    parser.add_argument("--trained-workers", type=int, default=None)
+    parser.add_argument("--trained-w2v-epochs", type=int, default=5)
+    parser.add_argument("--trained-glove-epochs", type=int, default=25)
+    parser.add_argument("--trained-glove-max-vocab", type=int, default=50_000)
+    parser.add_argument("--trained-glove-batch-size", type=int, default=65_536)
+    parser.add_argument("--trained-glove-learning-rate", type=float, default=0.05)
+    parser.add_argument("--trained-glove-x-max", type=float, default=100.0)
+    parser.add_argument("--trained-glove-alpha", type=float, default=0.75)
+    parser.add_argument(
+        "--trained-glove-max-tokens-per-doc",
+        type=int,
+        default=None,
+        help="Optional cap for tokens per review while building trained GloVe co-occurrence.",
+    )
     parser.add_argument("--retrieval-queries", type=int, default=5000)
     parser.add_argument("--umap-sample-size", type=int, default=50_000)
     parser.add_argument("--force-umap", action="store_true", help="Recompute UMAP coordinates instead of reusing existing coords.")
@@ -159,6 +176,8 @@ def main() -> None:
             run_tfidf="tfidf" in encoders,
             run_w2v="w2v" in encoders,
             run_glove="glove" in encoders,
+            run_w2v_trained="w2v_trained" in encoders,
+            run_glove_trained="glove_trained" in encoders,
             run_sbert="sbert" in encoders,
             run_bge="bge" in encoders,
             pretrained_w2v_path=args.pretrained_w2v_path,
@@ -171,6 +190,18 @@ def main() -> None:
             force=args.force_embeddings,
             transformer_batch_size=args.transformer_batch_size,
             text_batch_size=args.text_batch_size,
+            trained_vector_size=args.trained_vector_size,
+            trained_window=args.trained_window,
+            trained_min_count=args.trained_min_count,
+            trained_workers=args.trained_workers,
+            trained_w2v_epochs=args.trained_w2v_epochs,
+            trained_glove_epochs=args.trained_glove_epochs,
+            trained_glove_max_vocab=args.trained_glove_max_vocab,
+            trained_glove_batch_size=args.trained_glove_batch_size,
+            trained_glove_learning_rate=args.trained_glove_learning_rate,
+            trained_glove_x_max=args.trained_glove_x_max,
+            trained_glove_alpha=args.trained_glove_alpha,
+            trained_glove_max_tokens_per_doc=args.trained_glove_max_tokens_per_doc,
         )
         print_json("EMBEDDINGS FULL", embedding_summary)
 
