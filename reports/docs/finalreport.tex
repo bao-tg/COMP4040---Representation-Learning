@@ -11,6 +11,7 @@
 \usepackage{caption}
 \usepackage{float}
 \usepackage{xurl}
+\usepackage{needspace}
 \Urlmuskip=0mu plus 2mu\relax
 \newcommand{\code}[1]{\texttt{#1}}
 \newcommand{\sourcerepo}{\href{https://github.com/bao-tg/COMP4040---Representation-Learning}{https://github.com/bao-tg/COMP4040---Representation-Learning}}
@@ -80,7 +81,7 @@
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-Text representation is a critical modeling choice in large-scale review mining, because each encoder imposes a different geometry on the same corpus. This project studies that choice on Amazon Reviews 2023~\cite{hou2024bridging}. We construct a reproducible pipeline over 2,000,000 raw reviews and obtain 1,946,618 cleaned review instances across five product categories. We compare five representative encoders from three major representation families: TF-IDF with TruncatedSVD as a sparse lexical baseline, Word2Vec and GloVe as static word-vector averaging methods, and SBERT and BGE-large as contextual sentence encoders. The frozen embeddings are evaluated under the same downstream pipeline: category-aligned clustering, semantic retrieval, UMAP visualization, runtime and storage efficiency, and a supervised linear probe for five-class star-rating prediction. Anomaly analysis is retained only as an auxiliary diagnostic.
+Text representation is a critical modeling choice in large-scale review mining, because each encoder imposes a different geometry on the same corpus. This project studies that choice on Amazon Reviews 2023~\cite{hou2024bridging}. We construct a reproducible pipeline over 2,000,000 raw reviews and obtain 1,946,618 cleaned review instances across five product categories. We compare five representative encoders from three major representation families: TF-IDF with TruncatedSVD as a sparse lexical baseline, Word2Vec and GloVe as static word-vector averaging methods, and SBERT and BGE-large as contextual sentence encoders. The frozen embeddings are evaluated under the same downstream pipeline: category-aligned clustering, semantic retrieval, UMAP visualization, runtime and storage efficiency, and a supervised linear probe for five-class star-rating prediction.
 
 The results show that no single representation dominates all tasks. SBERT achieves the strongest category-aligned clustering by NMI and ARI, while BGE-large gives the best semantic retrieval and star-rating linear-probe performance. TF-IDF remains useful for transparent category-specific lexical structure, and static word-vector averages provide lightweight semantic baselines but lose document-level composition. A corpus-trained Word2Vec/GloVe ablation further shows that target-domain training improves Word2Vec but degrades GloVe, suggesting that domain adaptation depends on the embedding objective and the available co-occurrence statistics. Overall, the project highlights a practical encoder-selection trade-off: BGE-large is best when retrieval quality or rating-relevant semantics justify high compute cost, SBERT is a strong quality--cost compromise, and TF-IDF remains a scalable lexical baseline.
 \end{abstract}
@@ -88,14 +89,14 @@ The results show that no single representation dominates all tasks. SBERT achiev
 
 \section{Introduction}
 
-Representation learning is a central component of modern text mining systems because it determines how raw textual observations are converted into numerical forms that downstream algorithms can use. In text applications, this conversion is especially important: the quality of the representation affects whether documents with similar meanings are placed close together, whether latent category structure can be recovered, and whether unusual or inconsistent instances can be detected. Classical sparse representations such as TF-IDF remain widely used because they are simple, interpretable, efficient, and scalable \cite{salton1988}. However, they primarily capture lexical overlap and may fail to represent deeper semantic relationships between texts that use different surface forms.
+Representation learning is a central component of modern text mining systems because it determines how raw textual observations are converted into numerical forms that downstream algorithms can use. In text applications, this conversion is especially important: the quality of the representation affects whether documents with similar meanings are placed close together, whether latent category structure can be recovered, and whether downstream predictive signals are accessible. Classical sparse representations such as TF-IDF remain widely used because they are simple, interpretable, efficient, and scalable \cite{salton1988}. However, they primarily capture lexical overlap and may fail to represent deeper semantic relationships between texts that use different surface forms.
 
 Recent neural embedding models, including static word-vector methods and contextual sentence encoders, aim to address these limitations by mapping text into dense semantic vector spaces \cite{mikolov2013,pennington2014,vaswani2017,devlin2019}. Models such as Sentence-BERT and BGE-large are designed to capture sentence-level meaning and are therefore expected to perform better on semantic retrieval, clustering, and classification-style tasks \cite{reimers2019,xiao2023}. At the same time, these models require substantially greater computational resources, especially when applied to millions of documents. As a result, the practical value of a representation method depends not only on its predictive or semantic quality, but also on its runtime, memory footprint, and scalability.
 
 This project empirically studies this trade-off using large-scale Amazon review data \cite{hou2024bridging}. Our central research question is: \textit{Do contextual embeddings reveal richer and more useful structure in large text corpora than sparse or static-vector representations, and what computational cost is required to obtain these gains?} To answer this question, we compare five encoding approaches: TF-IDF with dimensionality reduction, pretrained Word2Vec, pretrained GloVe, Sentence-BERT, and BGE-large. We evaluate these representations across clustering, semantic retrieval, UMAP visualization, efficiency analysis, and a supervised linear probe for five-class star-rating classification. The contribution of this project is not a new embedding model, but a controlled large-scale empirical comparison showing how representation choice changes conclusions across unsupervised structure discovery, retrieval, supervised probing, and computational cost.
 \section{Dataset and Preprocessing}
 \subsection{Dataset}
-We use a sampled subset of Amazon Reviews 2023 \cite{hou2024bridging} containing five categories: Books, Electronics, Kindle Store, Movies and TV, and Sports and Outdoors. Each category contributes 400,000 raw rows, giving 2,000,000 raw reviews before cleaning. Reviews contain text, title, star rating, user/product identifiers, verified-purchase status, and category. Category is used as the external label for clustering and retrieval evaluation, while star rating is used for linear probing and auxiliary rating-inconsistency diagnostics. Raw category files were streamed from the public dataset to avoid loading the full compressed sources into memory. Because the sampling is intentionally category-balanced, the corpus should be interpreted as a controlled multi-category benchmark rather than as the natural Amazon review distribution.
+We use a sampled subset of Amazon Reviews 2023 \cite{hou2024bridging} containing five categories: Books, Electronics, Kindle Store, Movies and TV, and Sports and Outdoors. Each category contributes 400,000 raw rows, giving 2,000,000 raw reviews before cleaning. Reviews contain text, title, star rating, user/product identifiers, verified-purchase status, and category. Category is used as the external label for clustering and retrieval evaluation, while star rating is used for linear probing. Raw category files were streamed from the public dataset to avoid loading the full compressed sources into memory. Because the sampling is intentionally category-balanced, the corpus should be interpreted as a controlled multi-category benchmark rather than as the natural Amazon review distribution.
 
 \begin{table}[H]
 \centering
@@ -108,7 +109,7 @@ Column & Role in this project \\
 \midrule
 text & Raw review body; cleaned text is the only encoder input \\
 title & Metadata retained for inspection; not used as an encoder input \\
-rating & Target for linear probe and auxiliary rating-inconsistency diagnostic \\
+rating & Target for the linear probe \\
 category & External label for clustering, retrieval, and UMAP coloring \\
 user\_id & Used with product id and text for deduplication \\
 asin, parent\_asin & Product identifiers; not used as model features \\
@@ -121,7 +122,7 @@ verified\_purchase & Metadata retained for inspection and validation \\
 
 At the datapoint level, each instance is one product review. The encoder input is the cleaned review text, while the remaining fields are retained as metadata for evaluation, validation, or deduplication.
 
-Encoders receive only the cleaned review text. Category and rating are retained as evaluation metadata: category is used for clustering, retrieval, and UMAP coloring, while rating is used for the linear probe and auxiliary rating-inconsistency diagnostic.
+Encoders receive only the cleaned review text. Category and rating are retained as evaluation metadata: category is used for clustering, retrieval, and UMAP coloring, while rating is used for the linear probe.
 
 \subsection{Streaming preprocessing}
 The preprocessing stage is implemented as a streaming pipeline so that the sampled JSONL files do not need to be loaded fully into memory. Each review is normalized by removing HTML-like tags, normalizing whitespace, trimming spaces, and truncating long reviews to at most 256 whitespace tokens. Rows with empty or very short cleaned text are removed using a minimum cleaned-text length of 10 characters. Cross-chunk deduplication is performed by hashing the tuple of user id, parent ASIN, and cleaned text. The final output is a single Parquet file containing 1,946,618 cleaned reviews and the metadata needed for downstream evaluation.
@@ -162,7 +163,6 @@ The preprocessing stage is implemented as a streaming pipeline so that the sampl
 \label{fig:preprocess-flow}
 \end{figure}
 
-\vspace{-0.35em}
 \begin{table}[H]
 \centering
 \footnotesize
@@ -182,7 +182,6 @@ Total & 2,000,000 & 1,946,618 \\
 \caption{Full preprocessing output by category.}
 \label{tab:preprocess}
 \end{table}
-\vspace{-0.35em}
 
 Figure~\ref{fig:preprocess-flow} and Table~\ref{tab:preprocess} show that preprocessing is conservative rather than aggressive. The final corpus retains 97.33\% of the sampled rows, and the largest removal source is short or empty text rather than duplicate reviews. This matters because the downstream comparison is not driven by heavy filtering or by a major class imbalance introduced during cleaning. The kept category sizes remain close, ranging from 378,924 to 394,313 rows, so each encoder is evaluated on a broadly balanced five-category problem. At the same time, the category-specific drop rates are informative: Movies and TV loses 5.27\% of its rows, while Kindle Store loses only 1.42\%. This suggests that some categories contain more short, sparse, or noisy review text, which partly explains why category labels are useful but imperfect supervision signals for later clustering and retrieval analysis.
 
@@ -210,7 +209,7 @@ where $T_d$ is the whitespace-token sequence of review $d$ after out-of-vocabula
 
 \textbf{Corpus-trained static-vector ablation.} To separate the effect of external pretraining from the static averaging architecture, we also train Word2Vec and GloVe variants on the cleaned Amazon review corpus for Table~\ref{tab:static-ablation}. These variants keep the same 300-dimensional document representation in Eq.~\eqref{eq:mean-static}: after token-level vectors are learned, each review is encoded by averaging the covered word vectors. Corpus Word2Vec is trained as a skip-gram model with window size 5, minimum token count 5, subsampling rate $10^{-3}$, random seed 42, and 5 epochs over the streamed cleaned corpus. Corpus GloVe first keeps the 50,000 most frequent tokens with minimum count 5, builds distance-weighted co-occurrence counts within a window of 5, and optimizes the weighted log-co-occurrence objective for 25 epochs using $x_{\max}=100$ and $\alpha=0.75$. Reviews with no covered trained-vocabulary tokens again receive a zero vector. This ablation therefore tests whether target-domain token vectors improve the same static document-composition method, rather than introducing a new document encoder.
 
-\textbf{Contextual sentence embeddings.} Contextual sentence encoders build on Transformer and BERT-style representation learning \cite{vaswani2017,devlin2019}. SBERT all-MiniLM-L6-v2 outputs 384-dimensional sentence embeddings optimized for semantic similarity \cite{reimers2019,wang2020minilm}. BGE-large, \code{BAAI/bge-large-en-v1.5}, outputs 1024-dimensional embeddings and is designed for high-quality semantic retrieval \cite{xiao2023}. We encode the cleaned review text directly, without adding a retrieval prompt, so that the same representation can be reused across clustering, retrieval, visualization, linear probing, and auxiliary diagnostics. We expect BGE-large to perform strongly on retrieval and rating-related semantic tasks, but to be the most expensive encoder.
+\textbf{Contextual sentence embeddings.} Contextual sentence encoders build on Transformer and BERT-style representation learning \cite{vaswani2017,devlin2019}. SBERT all-MiniLM-L6-v2 outputs 384-dimensional sentence embeddings optimized for semantic similarity \cite{reimers2019,wang2020minilm}. BGE-large, \code{BAAI/bge-large-en-v1.5}, outputs 1024-dimensional embeddings and is designed for high-quality semantic retrieval \cite{xiao2023}. We encode the cleaned review text directly, without adding a retrieval prompt, so that the same representation can be reused across clustering, retrieval, visualization, and linear probing. We expect BGE-large to perform strongly on retrieval and rating-related semantic tasks, but to be the most expensive encoder.
 
 \section{Experimental Design}
 
@@ -259,7 +258,7 @@ where $T_d$ is the whitespace-token sequence of review $d$ after out-of-vocabula
     
     \node (tasks) [pipe, right=0.8cm of encoder] {
         \textbf{\large Mining tasks}\\[0.5em] 
-        {\small KMeans, FAISS,\\linear probe, diagnostics}
+        {\small KMeans, FAISS,\\linear probe, efficiency}
     };
     
     \node (compare) [pipe, right=0.8cm of tasks] {
@@ -275,7 +274,7 @@ where $T_d$ is the whitespace-token sequence of review $d$ after out-of-vocabula
 
 \end{tikzpicture}%
 }
-\caption{End-to-end experimental pipeline. The same cleaned Parquet corpus is encoded by all five representation methods, then reused for clustering, retrieval, visualization, linear probing, efficiency analysis, and auxiliary diagnostics.}
+\caption{End-to-end experimental pipeline. The same cleaned Parquet corpus is encoded by all five representation methods, then reused for clustering, retrieval, visualization, linear probing, and efficiency analysis.}
 \label{fig:overall-pipeline}
 \end{figure*}
 
@@ -298,16 +297,13 @@ for $k \in \{5,10,50\}$, and mean reciprocal rank
 \mathrm{MRR}=\frac{1}{|Q|}\sum_{q\in Q}\frac{1}{\mathrm{rank}_q},
 \end{equation}
 where $\ell_q$ is the query category, $\ell_j$ is the category of the $j$th retrieved item, and $\mathrm{rank}_q$ is the rank of the first relevant retrieved item.
-
-\subsection{Auxiliary anomaly diagnostics}
-We retain anomaly detection only as an auxiliary diagnostic. Isolation Forest is fit on a 200,000-row sample with fixed contamination $0.01$, and a scalable L2 SGDRegressor estimates rating residuals from frozen embeddings \cite{liu2008,bottou2010,pedregosa2011}. Because both views are threshold-driven and the corpus has already been cleaned for short text and duplicates, anomaly counts are not treated as encoder-quality metrics.
-
+\Needspace{10\baselineskip}
 \subsection{Linear probe and efficiency}
 The linear probe tests how much rating information is directly accessible from each frozen embedding. We train an L2-regularized logistic classifier,
 \begin{equation}
 \hat{y}=\arg\max_c \mathrm{softmax}(Wz_i+b)_c,
 \end{equation}
-with an 80/20 stratified train/test split and three epochs, implemented with stochastic-gradient linear models \cite{bottou2010,pedregosa2011}. In the full run this gives 1,557,294 training rows and 389,324 held-out test rows. Efficiency analysis records rows, dimensions, file size, device, and parsed embedding runtime.
+Architecturally, the probe is deliberately shallow: the frozen review embedding $z_i$ is the input layer, a single affine layer maps it to five logits for star ratings 1--5, and a softmax layer converts those logits into class probabilities. Thus $W \in \mathbb{R}^{5 \times p}$ and $b \in \mathbb{R}^{5}$ are the only trainable parameters, where $p$ is the encoder dimension: 300 for TF-IDF/SVD, Word2Vec, and GloVe, 384 for SBERT, and 1024 for BGE-large. There are no hidden layers, dropout layers, nonlinear projection heads, or encoder fine-tuning; all embedding arrays remain frozen. The implementation uses stochastic-gradient logistic regression with log-loss, L2 penalty, mini-batches of 16,384 examples, and \texttt{partial\_fit} updates, so the classifier is a lightweight probe rather than a high-capacity downstream model. In the full run this gives 1,557,294 training rows and 389,324 held-out test rows. Efficiency analysis records rows, dimensions, file size, device, and parsed embedding runtime.
 
 \section{Results}
 
@@ -368,7 +364,7 @@ This result is important because star rating is different from product category.
 
 \subsection{Corpus-Trained Static-Vector Ablation}
 
-Table~\ref{tab:static-ablation} compares pretrained and corpus-trained Word2Vec/GloVe variants using the same 300-dimensional averaged word-vector document representation. Runtime is not used as a direct comparison because the corpus-trained variants were run locally after the original server experiment.
+Table~\ref{tab:static-ablation} compares pretrained and corpus-trained Word2Vec/GloVe variants using the same cleaned rows, whitespace-token input, 300-dimensional word vectors, averaged document composition, and downstream evaluation code. This makes the ablation fair for testing the effect of token-vector source under a fixed static document encoder. It is not a data-budget-controlled pretraining benchmark: the pretrained vectors come from large external corpora, while the corpus-trained variants are learned from the full unlabeled Amazon review corpus before the frozen embeddings are evaluated. Therefore, the ablation should be interpreted as external lexical knowledge versus in-domain unsupervised adaptation, not as a strictly train-split-only supervised comparison. Runtime is not used as a direct comparison because the corpus-trained variants were run locally after the original server experiment.
 
 \begin{table*}[t]
 \centering
@@ -433,10 +429,10 @@ Embedding dimension should not be interpreted as the only explanation for perfor
 \section{Scalability and Complexity}
 At full scale, the pipeline must be streaming and reusable. Preprocessing runs in chunks and writes Parquet, avoiding memory pressure from the two-million-row raw corpus. Embeddings are saved as \code{.npy} arrays with metadata so downstream experiments can be repeated without re-encoding. This design is important because BGE-large alone required about 66 hours to encode.
 
-Theoretical complexity explains the observed cost pattern. TF-IDF is mostly linear in the number of tokens plus the cost of truncated SVD over a sparse term-document matrix. Static embedding averages are linear in the number of tokens times embedding dimension after vectors are loaded. Transformer encoders are more expensive because self-attention scales approximately quadratically with sequence length within each forward pass \cite{vaswani2017}. Downstream methods also scale with data size: exact FAISS L2 retrieval indexes all embeddings \cite{johnson2019}, MiniBatchKMeans scales with rows, clusters, dimensions, and passes \cite{sculley2010}, and auxiliary Isolation Forest diagnostics are made practical by fitting on a sample before scoring the full matrix \cite{liu2008}.
+Theoretical complexity explains the observed cost pattern. TF-IDF is mostly linear in the number of tokens plus the cost of truncated SVD over a sparse term-document matrix. Static embedding averages are linear in the number of tokens times embedding dimension after vectors are loaded. Transformer encoders are more expensive because self-attention scales approximately quadratically with sequence length within each forward pass \cite{vaswani2017}. Downstream methods also scale with data size: exact FAISS L2 retrieval indexes all embeddings \cite{johnson2019}, and MiniBatchKMeans scales with rows, clusters, dimensions, and passes \cite{sculley2010}.
 
 \section{Limitations}
-First, category labels are used as retrieval relevance labels, but same-category reviews are not always semantically similar and different-category reviews can discuss similar concepts. Second, star ratings are noisy sentiment labels; a three-star review can contain mixed positive and negative evidence. Third, the raw sample is category-balanced by design, so it is useful for controlled comparison but does not preserve the natural Amazon category or product distribution. Fourth, Word2Vec and GloVe are represented by simple averaged word vectors, so stronger document-level static baselines might narrow the gap. Fifth, embedding dimensions are not matched across encoders; this is a practical off-the-shelf comparison rather than a controlled equal-dimensional ablation. Sixth, retrieval is evaluated with exact L2 neighborhoods only; cosine-normalized retrieval and BGE prompt variants may change the retrieval ranking. Seventh, we did not run exhaustive hyperparameter searches or repeated-seed confidence intervals for KMeans, UMAP, or the linear probe. Eighth, the corpus-trained static-vector ablation trains word vectors on the full cleaned corpus without category or rating labels; therefore, the linear-probe results should be interpreted as an unsupervised representation-learning setting rather than a strictly train-split-only supervised setting. Ninth, the corpus-trained Word2Vec and GloVe ablation was run locally after the original server experiment, so its runtime is reported only as a reproducibility reference and not as a hardware-controlled efficiency comparison. Finally, the anomaly outputs are retained only as qualitative diagnostics because fixed thresholds largely control the number of flagged rows.
+First, category labels are used as retrieval relevance labels, but same-category reviews are not always semantically similar and different-category reviews can discuss similar concepts. Second, star ratings are noisy sentiment labels; a three-star review can contain mixed positive and negative evidence. Third, the raw sample is category-balanced by design, so it is useful for controlled comparison but does not preserve the natural Amazon category or product distribution. Fourth, Word2Vec and GloVe are represented by simple averaged word vectors, so stronger document-level static baselines might narrow the gap. Fifth, embedding dimensions are not matched across encoders; this is a practical off-the-shelf comparison rather than a controlled equal-dimensional ablation. Sixth, retrieval is evaluated with exact L2 neighborhoods only; cosine-normalized retrieval and BGE prompt variants may change the retrieval ranking. Seventh, we did not run exhaustive hyperparameter searches or repeated-seed confidence intervals for KMeans, UMAP, or the linear probe. Eighth, the corpus-trained static-vector ablation trains word vectors on the full cleaned corpus without category or rating labels; therefore, the linear-probe results should be interpreted as an unsupervised representation-learning setting rather than a strictly train-split-only supervised setting. Finally, the corpus-trained Word2Vec and GloVe ablation was run locally after the original server experiment, so its runtime is reported only as a reproducibility reference and not as a hardware-controlled efficiency comparison.
 
 \section{Conclusion}
 This project scales the representation-learning pipeline from a small prototype to a full run over 1,946,618 cleaned Amazon reviews. The results support the original hypothesis that contextual embeddings reveal richer structure than sparse or static representations, but they also show that encoder choice is task-dependent: SBERT is strongest for category-aligned clustering, BGE-large is strongest for retrieval and rating prediction, and TF-IDF remains a transparent lexical baseline. The corpus-trained static-vector ablation further shows that target-domain training can help Word2Vec but does not automatically improve all static-vector methods, since corpus-trained GloVe underperforms its broad pretrained counterpart. Overall, encoder choice should be treated as a modeling decision rather than a default preprocessing step because each representation imposes different geometric assumptions on the same corpus.

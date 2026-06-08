@@ -1,134 +1,142 @@
 # COMP4040 Representation Learning
 
 This repository contains a reproducible representation-learning pipeline for
-Amazon review text. It compares classical sparse/static-vector representations
-and transformer sentence embeddings across clustering, retrieval, anomaly
-detection, linear probing, UMAP visualization, and runtime efficiency.
+large-scale Amazon review text. The main experiment compares five text
+representations on the same cleaned corpus: TF-IDF/SVD, pretrained Word2Vec,
+pretrained GloVe, SBERT, and BGE-large.
 
-## Project Status
+The final report focuses on category-aligned clustering, semantic retrieval,
+UMAP visualization, runtime/storage efficiency, and a shallow linear probe for
+five-class star-rating prediction. The codebase also keeps anomaly-diagnostic
+utilities and a corpus-trained Word2Vec/GloVe ablation for additional analysis.
 
-The full five-encoder experiment has been completed on the full processed
-corpus.
+## Current Status
 
 | Item | Status |
 | --- | --- |
 | Raw input scale | 2,000,000 Amazon review rows |
-| Processed corpus | 1,946,618 cleaned rows |
-| Encoders evaluated | TF-IDF, Word2Vec, GloVe, SBERT, BGE-large |
+| Processed corpus | 1,946,618 cleaned review rows |
+| Main encoders | TF-IDF, Word2Vec, GloVe, SBERT, BGE-large |
+| Static-vector ablation | `w2v_trained`, `glove_trained` |
 | Main run profile | `server_full` |
 | Validation status | OK |
-| Commit-safe report package | `reports/final/` |
+| Report source | `reports/docs/finalreport.tex` |
+| Report PDF | `reports/docs/finalreport.pdf` |
+| Commit-safe result package | `reports/final/` |
 
-Generated datasets, embeddings, raw experiment outputs, and logs are intentionally
-kept out of Git. The sanitized report outputs under `reports/final/` are tracked
-for review and report writing.
+Generated data, embeddings, model files, experiment outputs, logs, caches, and
+external vector files are intentionally ignored by Git. The tracked report
+artifacts are the LaTeX report under `reports/docs/` and the sanitized result
+package under `reports/final/`.
 
-## Encoders
+## Results Snapshot
 
-| Encoder | Representation | Dimension | Notes |
-| --- | --- | ---: | --- |
-| TF-IDF | TF-IDF + TruncatedSVD | 300 | Sparse lexical baseline reduced to dense vectors |
-| W2V | Google News Word2Vec | 300 | Pretrained static word vectors averaged per review |
-| GloVe | GloVe 840B | 300 | Pretrained static word vectors averaged per review |
-| SBERT | `all-MiniLM-L6-v2` | 384 | SentenceTransformer encoder |
-| BGE | `BAAI/bge-large-en-v1.5` | 1024 | Large SentenceTransformer encoder |
-
-The current report treats Word2Vec and GloVe as pretrained static-vector
-baselines; neither one is trained from scratch on the Amazon review corpus.
-
-## Evaluation Tasks
-
-| Task | Metrics / Outputs |
-| --- | --- |
-| Clustering | Normalized Mutual Information, Adjusted Rand Index, Silhouette |
-| Retrieval | Mean Reciprocal Rank, Precision@5, Precision@10, Precision@50 |
-| Anomaly detection | Isolation Forest anomaly count, rating inconsistency count |
-| Linear probe | Accuracy, macro F1, weighted F1, confusion matrices |
-| UMAP | Category-colored and cluster-colored 2D projections |
-| Efficiency | embedding shape, file size, runtime, device/backend |
-
-## Result Snapshot
-
-Full precision tables and machine-readable metrics are available in
-`reports/final/`.
+Full precision tables and machine-readable metrics are in `reports/final/`.
 
 | Encoder | Dim | Device | Embed Time | NMI | ARI | MRR | P@5 | Acc. | Macro F1 |
 | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | TF-IDF | 300 | CPU | 5:08.61 | 0.226 | 0.107 | 0.691 | 0.527 | 0.447 | 0.435 |
-| W2V | 300 | CPU | 2:30.93 | 0.014 | 0.010 | 0.722 | 0.580 | 0.432 | 0.420 |
+| Word2Vec | 300 | CPU | 2:30.93 | 0.014 | 0.010 | 0.722 | 0.580 | 0.432 | 0.420 |
 | GloVe | 300 | CPU | 1:56.52 | 0.030 | 0.023 | 0.742 | 0.597 | 0.433 | 0.408 |
 | SBERT | 384 | CUDA | 3:01:27 | 0.410 | 0.348 | 0.819 | 0.718 | 0.456 | 0.443 |
-| BGE | 1024 | CUDA | 65:56:44 | 0.342 | 0.294 | 0.828 | 0.730 | 0.590 | 0.584 |
+| BGE-large | 1024 | CUDA | 65:56:44 | 0.342 | 0.294 | 0.828 | 0.730 | 0.590 | 0.584 |
 
-Interpretation notes:
+Main interpretation:
 
-- BGE is strongest on retrieval and linear probing in the current full run.
-- SBERT is strongest on clustering NMI and ARI.
-- Static-vector baselines are much cheaper to embed, but are weaker on the main
-  retrieval and linear-probe outcomes.
-- Anomaly counts are controlled by the configured contamination threshold and
-  should not be interpreted as a direct encoder quality ranking.
+- SBERT gives the strongest category-aligned clustering by NMI and ARI.
+- BGE-large gives the strongest semantic retrieval and star-rating linear probe.
+- TF-IDF remains a scalable lexical baseline and is stronger than static
+  averaged word vectors for category clustering.
+- Pretrained static word-vector averages are cheap and useful for local semantic
+  retrieval, but they lose document-level composition.
+- Anomaly outputs are auxiliary diagnostics. Their counts are affected by fixed
+  thresholds and are not used as an encoder-quality leaderboard.
 
-## Report Artifacts
+## Static-Vector Ablation
 
-Use these files for the final report:
+The report also compares pretrained Word2Vec/GloVe against corpus-trained
+variants while keeping the same 300-dimensional averaged word-vector document
+representation.
+
+| Encoder | Token-vector source | NMI | ARI | MRR | P@5 | Acc. | Macro F1 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Word2Vec | Google News | 0.014 | 0.010 | 0.722 | 0.580 | 0.432 | 0.420 |
+| Word2Vec | Amazon reviews | 0.143 | 0.119 | 0.752 | 0.613 | 0.492 | 0.481 |
+| GloVe | Common Crawl 840B | 0.030 | 0.023 | 0.742 | 0.597 | 0.433 | 0.408 |
+| GloVe | Amazon reviews | 0.007 | 0.004 | 0.618 | 0.430 | 0.308 | 0.286 |
+
+This ablation is not a hardware-controlled runtime comparison. It was run after
+the original server experiment and should be read as a representation-source
+check: in-domain Word2Vec helps here, while in-domain GloVe does not.
+
+## Repository Layout
 
 ```text
-reports/final/final_analysis_summary.md
-reports/final/final_analysis_summary.csv
-reports/final/final_analysis_summary.json
-reports/final/metrics/
-reports/final/figures/
+.
+|-- src/
+|   |-- full_pipeline.py      # authoritative full/sample pipeline implementation
+|   |-- preprocess.py         # text cleaning helpers
+|   |-- encoders.py           # lightweight encoder wrappers
+|   |-- cluster.py            # clustering helpers
+|   |-- retrieval.py          # retrieval helpers
+|   |-- anomaly.py            # auxiliary anomaly diagnostics
+|   |-- metrics.py            # metric utilities
+|   `-- visualize.py          # plotting helpers
+|-- scripts/
+|   |-- run_server_full.py    # resumable full-data entrypoint
+|   |-- run_server_sample.py  # sample/smoke entrypoint
+|   |-- download_amazon_reviews.py
+|   |-- deploy_home_server.sh
+|   |-- bootstrap_server.sh
+|   `-- pull_server_artifacts.sh
+|-- notesbook/                # notebooks mirroring the pipeline stages
+|-- reports/
+|   |-- docs/                 # LaTeX report source, styles, figures, and PDF
+|   `-- final/                # commit-safe metrics and report-ready figures
+|-- data/                     # ignored raw/processed data, embeddings, models
+|-- experiments/              # ignored full run outputs
+|-- logs/                     # ignored runtime logs
+|-- SERVER_RUNBOOK.md         # long-run server workflow
+|-- StudyGuide.md             # study-oriented explanation
+|-- requirements.txt
+`-- README.md
 ```
 
-The report package intentionally excludes:
+Notes on cleanliness:
 
-- full embedding arrays under `data/embeddings/`
-- raw and processed review data
-- runtime logs containing machine-specific paths
-- anomaly row CSVs that include review text fields
-- UMAP coordinate arrays and clustering assignment arrays
-
-## Repository Structure
-
-```text
-src/full_pipeline.py        # full/sample streaming pipeline and analysis suite
-src/preprocess.py           # text cleaning helpers
-src/encoders.py             # encoder wrappers
-src/cluster.py              # clustering helpers
-src/retrieval.py            # retrieval helpers
-src/anomaly.py              # anomaly detection helpers
-src/metrics.py              # metric utilities
-src/visualize.py            # plotting helpers
-scripts/run_server_full.py  # resumable full pipeline entrypoint
-scripts/run_server_sample.py # sample/smoke pipeline entrypoint
-reports/final/              # commit-safe result package for report writing
-notesbook/                  # explanatory notebooks mirroring the pipeline
-```
+- `data/`, `experiments/`, `logs/`, `__pycache__/`, LaTeX intermediates, local
+  vector files, and local environment files are ignored by `.gitignore`.
+- `reports/final/` is the sanitized package intended for Git/report evidence.
+- `reports/docs/finalreport.tex`, `reports/docs/finalreport.pdf`, report style
+  files, references, and report figures are tracked.
+- Large external vectors such as `GoogleNews-vectors-negative300.bin` and
+  `glove.840B.300d.txt` are local-only dependencies.
 
 ## Setup
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
 Optional Hugging Face token:
 
 ```bash
-HF_TOKEN=...
+cp .env.example .env
+# then set HF_TOKEN=... if needed
 ```
 
 ## Data And External Models
 
-Place raw Amazon review JSONL files under:
+Place sampled Amazon Reviews 2023 JSONL files under:
 
 ```text
 data/raw/
 ```
 
-The full pipeline streams all matching raw files into:
+The full preprocessing stage streams all matching raw files into:
 
 ```text
 data/processed/cleaned_reviews.parquet
@@ -137,15 +145,15 @@ data/processed/cleaned_reviews.parquet
 External pretrained static-vector files are not committed:
 
 ```text
-glove.840B.300d.txt                 # required to rebuild GloVe locally
-GoogleNews-vectors-negative300.bin  # required to rebuild W2V from a local file
+GoogleNews-vectors-negative300.bin  # optional local Word2Vec file
+glove.840B.300d.txt                 # optional local GloVe file
 ```
 
-Both W2V and GloVe are pretrained file-backed encoders in this project. GloVe is
-loaded from `glove.840B.300d.txt` at the repository root, and can be downloaded
-with `--download-glove` if the file is missing. W2V is loaded from
-`GoogleNews-vectors-negative300.bin` when `--pretrained-w2v-path` is provided,
-and can also be downloaded through gensim with `--download-pretrained-w2v`.
+Word2Vec can use either a local Google News binary via `--pretrained-w2v-path`
+or a gensim download via `--download-pretrained-w2v`. GloVe can use a local
+`glove.840B.300d.txt` file or download/extract the Stanford archive with
+`--download-glove`. The GloVe download is opt-in because the archive and
+extracted text file are large.
 
 ## Reproduce The Full Pipeline
 
@@ -155,7 +163,7 @@ Preprocess raw JSONL files:
 python scripts/run_server_full.py --stage preprocess --force-preprocess
 ```
 
-Build embeddings:
+Build the five main embeddings from local static-vector files:
 
 ```bash
 python scripts/run_server_full.py \
@@ -166,7 +174,7 @@ python scripts/run_server_full.py \
   --transformer-batch-size 32
 ```
 
-If the pretrained static-vector files are missing, use explicit download flags:
+Build the five main embeddings and allow downloads for missing static vectors:
 
 ```bash
 python scripts/run_server_full.py \
@@ -177,11 +185,24 @@ python scripts/run_server_full.py \
   --transformer-batch-size 32
 ```
 
-`--download-glove` downloads and extracts the Stanford `glove.840B.300d.zip`
-archive. This is intentionally opt-in because the zip is about 2 GB and the
-extracted text file is much larger.
+Run the main analysis without rebuilding embeddings:
 
-Optional corpus-trained static-vector comparison:
+```bash
+python scripts/run_server_full.py \
+  --stage analysis \
+  --encoders tfidf,w2v,glove,sbert,bge \
+  --analysis-tasks clustering,retrieval,umap,linear_probe,efficiency,summary \
+  --umap-sample-size 50000 \
+  --retrieval-queries 5000
+```
+
+Use `--force-embeddings` only when intentionally replacing existing embedding
+artifacts. Use `--force-umap` only when intentionally recomputing UMAP
+coordinates.
+
+## Run The Static-Vector Ablation
+
+Build corpus-trained Word2Vec and GloVe embeddings:
 
 ```bash
 python scripts/run_server_full.py \
@@ -195,57 +216,39 @@ python scripts/run_server_full.py \
   --trained-glove-max-vocab 50000
 ```
 
-These encoders do not overwrite the pretrained `w2v.npy` or `glove.npy`
-artifacts. They write `w2v_trained.npy` and `glove_trained.npy`, allowing the
-analysis stage to compare pretrained static vectors against vectors learned only
-from the Amazon review corpus.
-
-Embedding runs also update `data/embeddings/embedding_run_summary.json` with a
-per-encoder internal runtime, so trained W2V and trained GloVe runtimes remain
-separate even if both are launched in one command. For report-grade runtime logs,
-run each encoder separately with `/usr/bin/time -v` as shown in
-`SERVER_RUNBOOK.md`.
-
-Run the full analysis suite without rebuilding embeddings:
-
-```bash
-python scripts/run_server_full.py \
-  --stage analysis \
-  --encoders tfidf,w2v,glove,sbert,bge \
-  --analysis-tasks all \
-  --umap-sample-size 50000 \
-  --retrieval-queries 5000
-```
-
-To include the corpus-trained static-vector experiment in the same analysis,
-append the two trained encoders:
+Analyze the five main encoders plus the two corpus-trained variants:
 
 ```bash
 python scripts/run_server_full.py \
   --stage analysis \
   --encoders tfidf,w2v,glove,w2v_trained,glove_trained,sbert,bge \
-  --analysis-tasks all \
-  --umap-sample-size 50000 \
+  --analysis-tasks clustering,retrieval,linear_probe,efficiency,summary \
   --retrieval-queries 5000
 ```
 
-Refresh only UMAP plots and summary from existing artifacts:
+The ablation writes separate artifacts:
 
-```bash
-python scripts/run_server_full.py \
-  --stage analysis \
-  --encoders tfidf,w2v,glove,sbert,bge \
-  --analysis-tasks umap,summary \
-  --umap-sample-size 50000
+```text
+data/embeddings/w2v_trained.npy
+data/embeddings/glove_trained.npy
+data/models/w2v_trained.model
+data/models/glove_trained.pt
 ```
 
-Use `--force-embeddings` or `--force-umap` only when intentionally replacing
-existing artifacts.
+These files are ignored and do not replace pretrained `w2v.npy` or `glove.npy`.
 
-## Notebook Workflow
+## Sample And Notebook Workflows
 
-The notebooks mirror the pipeline stages and are useful for explanation,
-inspection, and small interactive checks:
+Run a small sample pipeline:
+
+```bash
+python scripts/run_server_sample.py \
+  --rows-per-category 1000 \
+  --encoders tfidf,w2v,sbert,bge \
+  --download-pretrained-w2v
+```
+
+The notebooks mirror the pipeline stages for inspection and explanation:
 
 ```text
 notesbook/01_eda.ipynb
@@ -256,18 +259,34 @@ notesbook/05_retrieval.ipynb
 notesbook/06_anomaly.ipynb
 ```
 
-Use `RUN_MODE = "sample"` for quick local checks and `RUN_MODE = "full"` for the
-full dataset. Long full runs should use `scripts/run_server_full.py` because it
-is resumable and validates existing artifacts.
+For long full-data runs, prefer `scripts/run_server_full.py` over notebooks
+because it is resumable and validates existing artifacts.
+
+## Report Artifacts
+
+Use these tracked files for report review and evidence:
+
+```text
+reports/docs/finalreport.tex
+reports/docs/finalreport.pdf
+reports/final/final_analysis_summary.md
+reports/final/final_analysis_summary.csv
+reports/final/final_analysis_summary.json
+reports/final/metrics/
+reports/final/figures/
+```
+
+`reports/final/` intentionally excludes raw data, full embedding arrays, local
+runtime logs, anomaly row CSVs with review text fields, UMAP coordinate arrays,
+and clustering assignment arrays.
 
 ## Operational Notes
 
 - `SERVER_RUNBOOK.md` contains server deployment, tmux, runtime logging, and
   artifact pull-back instructions.
-- `StudyGuide.md` contains the study-oriented explanation of encoders, metrics,
+- `StudyGuide.md` contains a study-oriented explanation of encoders, metrics,
   and interpretation.
-- `reports/final/README.md` documents exactly which report artifacts are safe to
-  commit.
+- `reports/final/README.md` documents the sanitized report package.
 
 ## References
 
